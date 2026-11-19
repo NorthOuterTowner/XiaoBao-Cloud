@@ -38,13 +38,22 @@ const HEART_OFFSET = 48;
 // sizing it by height would make a dried fish longer than the cat is tall.
 const TREAT_SCALE = 0.45;
 // How far to the side of the cat's centre the treat lands, as a fraction of the
-// render box. Far enough out to clear the tail, which is the widest thing the cat
-// has and otherwise sits right on top of its dinner.
-const TREAT_OFFSET = 0.4;
-// Where the fish comes to rest, measured down from the top of the cat's box as a
-// fraction of its height: roughly the mouth of the open-mouthed sit. The fall now
-// stops here rather than on the floor, so the fish lands at the cat's mouth.
-const TREAT_MOUTH = 0.52;
+// cat's sitting height. The front-facing feeding frames draw the mouth a little left
+// of the box centre (canvas x ~113 of 256, with the sit 157 tall).
+//
+// These are measured against the cat as drawn, not its render box: how much empty
+// margin the box has around the cat moves whenever the asset pipeline's global
+// scale does, and box fractions silently drifted with it.
+const TREAT_MOUTH_X = -0.096;
+// Where the fish comes to rest: its centre this many sitting-heights above the
+// floor: the mouth line, between the open mouth of feed_wait (canvas y ~158) and the
+// lower, closed chewing mouth (y ~170). The fall stops here.
+const TREAT_MOUTH = 0.564;
+// The fish is held crosswise in the mouth by its head end, the body sticking out to
+// the cat's left (screen right): this fraction of the fish image's width, measured
+// from its head end, sits on the mouth. 0.22 is where the bitten-down pieces start,
+// so the fish still reaches the mouth after each bite.
+const TREAT_BITE = 0.22;
 // How far the mouse has to move with the button down before a click becomes a drag.
 const DRAG_THRESHOLD = 4;
 // Proof of life for the main process while the cat holds the mouse.
@@ -153,6 +162,16 @@ function applyStage(info) {
   if (brain) {
     brain.setBounds(0, Math.max(0, stage.width - size), walkSpeed());
   }
+}
+
+/** How tall the resting sit is on screen, in px. */
+function sitPx() {
+  return (sprites.sitHeight * stage.catSize) / sprites.canvas;
+}
+
+/** The sprite ground line, in px down from the top of the cat's box. */
+function groundInBox() {
+  return (sprites.baseline * stage.catSize) / sprites.canvas;
 }
 
 /** Top of the cat's canvas, in window pixels, when it is standing on the floor. */
@@ -378,16 +397,14 @@ function placeTreat() {
   }
 
   const { width, height } = treatBox();
-  const centre = offer.x + stage.catSize / 2;
-  // Beside the cat rather than behind it, flipped inwards when the cat is far enough
-  // right that the fish would hang off the screen.
-  const side = centre + stage.catSize * TREAT_OFFSET + width / 2 > stage.width ? -1 : 1;
-  const left = Math.round(centre + side * stage.catSize * TREAT_OFFSET - width / 2);
-  // Rest the fish at the cat's mouth, not on the floor: the top of the cat's box is
-  // `catTop()` window pixels down, and the mouth is TREAT_MOUTH of the way into it.
+  // In the cat's mouth, held by its head. The body sticks out over the cat's cheek
+  // and stays inside the cat's own box, so it never hangs off the screen edge.
+  const mouthX = offer.x + stage.catSize / 2 + sitPx() * TREAT_MOUTH_X;
+  const left = Math.round(mouthX - width * TREAT_BITE);
+  // The mouth's height: the top of the cat's box is `catTop()` window pixels down.
   // `bottom` is measured up from the window's bottom edge.
   const mouthBottom = Math.round(
-    window.innerHeight - (catTop() + stage.catSize * TREAT_MOUTH) - height / 2
+    window.innerHeight - (catTop() + groundInBox() - sitPx() * TREAT_MOUTH) - height / 2
   );
 
   if (treatEl.hidden) {
@@ -416,7 +433,8 @@ function spawnHeart() {
   // Just clear of the silhouette: beside the head rather than on top of it.
   const side = Math.random() < 0.5 ? -1 : 1;
   const x = brain.x + size / 2 + side * HEART_OFFSET - 13 + (Math.random() - 0.5) * 8;
-  const y = catTop() + size * 0.06;
+  // A little above the top of the head, measured off the cat rather than its box.
+  const y = catTop() + groundInBox() - sitPx() * 1.29;
   heart.style.left = `${Math.round(x)}px`;
   heart.style.top = `${Math.round(y)}px`;
 

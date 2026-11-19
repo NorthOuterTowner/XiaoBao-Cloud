@@ -6,6 +6,9 @@
          injects into the packaged page. A meta tag here would have to name the IPC
          origins itself, which differ per platform. -->
     <title>Desktop Cat</title>
+    <!-- Never shown (no title bar, no taskbar entry), but without one the WebView asks
+         for /favicon.ico and logs a 404. -->
+    <link rel="icon" href="../icons/icons8-heart-48.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>

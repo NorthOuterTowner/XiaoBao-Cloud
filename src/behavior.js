@@ -70,6 +70,7 @@ const STANDING = new Set([
   'face_front_from_left',
   'face_front_from_right',
   'startle',
+  'hop_to_front',
 ]);
 
 export class Brain {
@@ -257,8 +258,8 @@ export class Brain {
   _landSteps() {
     return [
       { action: 'startle' },
-      // startle ends side on and standing, facing left.
-      { action: 'face_front_from_left' },
+      // startle ends side on and standing, facing left: hop round to face front.
+      { action: 'hop_to_front' },
       { action: 'sit_down' },
       { action: SIT, hold: this._rand(4, 9) },
     ];
@@ -538,7 +539,8 @@ export class Brain {
       return [{ action: 'face_front_from_right' }, { action: 'sit_down' }];
     }
     if (a === 'startle') {
-      return [{ action: 'face_front_from_left' }, { action: 'sit_down' }];
+      // Hops round to face front, landing on the pose sit_down starts from.
+      return [{ action: 'hop_to_front' }, { action: 'sit_down' }];
     }
     if (STANDING.has(a)) return [{ action: 'sit_down' }];
     return [];

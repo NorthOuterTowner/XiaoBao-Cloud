@@ -17,17 +17,17 @@
         "sit/010.png",
         "sit/011.png",
         "sit/012.png",
-        "sit/013.png",
-        "sit/014.png",
+        "sit/011.png",
+        "sit/010.png",
         "sit/015.png",
         "sit/016.png",
         "sit/017.png",
         "sit/018.png",
         "sit/019.png",
-        "sit/020.png",
-        "sit/021.png",
-        "sit/022.png",
-        "sit/023.png"
+        "sit/004.png",
+        "sit/003.png",
+        "sit/002.png",
+        "sit/001.png"
       ],
       "fps": 8.0,
       "loop": true,
@@ -42,9 +42,9 @@
         "blink/001.png",
         "blink/002.png",
         "blink/003.png",
-        "blink/004.png",
-        "blink/005.png",
-        "blink/006.png"
+        "blink/002.png",
+        "blink/001.png",
+        "blink/000.png"
       ],
       "fps": 12.0,
       "loop": false,
@@ -55,15 +55,15 @@
     },
     "head_tilt": {
       "frames": [
-        "head_tilt/000.png",
+        "blink/000.png",
         "head_tilt/001.png",
         "head_tilt/002.png",
         "head_tilt/003.png",
-        "head_tilt/004.png",
-        "head_tilt/005.png",
-        "head_tilt/006.png",
-        "head_tilt/007.png",
-        "head_tilt/008.png"
+        "head_tilt/003.png",
+        "head_tilt/003.png",
+        "head_tilt/002.png",
+        "head_tilt/001.png",
+        "blink/000.png"
       ],
       "fps": 9.0,
       "loop": false,
@@ -78,16 +78,18 @@
         "stand_up/001.png",
         "stand_up/002.png",
         "stand_up/003.png",
-        "stand_up/004.png"
+        "stand_up/004.png",
+        "stand_up/005.png"
       ],
-      "fps": 8.9286,
+      "fps": 10.7143,
       "loop": false,
       "tags": [
         "transition",
         "front"
       ],
       "durations": [
-        0.14,
+        0.08,
+        0.06,
         0.09,
         0.08,
         0.09,
@@ -96,13 +98,14 @@
     },
     "sit_down": {
       "frames": [
-        "sit_down/000.png",
-        "sit_down/001.png",
-        "sit_down/002.png",
-        "sit_down/003.png",
-        "sit_down/004.png"
+        "stand_up/005.png",
+        "stand_up/004.png",
+        "stand_up/003.png",
+        "stand_up/002.png",
+        "sit_down/004.png",
+        "sit_down/005.png"
       ],
-      "fps": 8.7719,
+      "fps": 9.5238,
       "loop": false,
       "tags": [
         "transition",
@@ -113,7 +116,8 @@
         0.09,
         0.08,
         0.1,
-        0.18
+        0.18,
+        0.06
       ]
     },
     "stand": {
@@ -146,8 +150,7 @@
       "frames": [
         "turn_left/000.png",
         "turn_left/001.png",
-        "turn_left/002.png",
-        "turn_left/003.png"
+        "turn_left/002.png"
       ],
       "fps": 8.0,
       "loop": false,
@@ -160,8 +163,7 @@
         "turn_right/000.png",
         "turn_right/001.png",
         "turn_right/002.png",
-        "turn_right/003.png",
-        "turn_right/004.png"
+        "turn_right/003.png"
       ],
       "fps": 8.0,
       "loop": false,
@@ -171,10 +173,9 @@
     },
     "face_front_from_left": {
       "frames": [
-        "face_front_from_left/000.png",
-        "face_front_from_left/001.png",
-        "face_front_from_left/002.png",
-        "face_front_from_left/003.png"
+        "turn_left/002.png",
+        "turn_left/001.png",
+        "turn_left/000.png"
       ],
       "fps": 8.0,
       "loop": false,
@@ -184,16 +185,44 @@
     },
     "face_front_from_right": {
       "frames": [
-        "face_front_from_right/000.png",
-        "face_front_from_right/001.png",
-        "face_front_from_right/002.png",
-        "face_front_from_right/003.png",
-        "face_front_from_right/004.png"
+        "turn_right/003.png",
+        "turn_right/002.png",
+        "turn_right/001.png",
+        "turn_right/000.png"
       ],
       "fps": 8.0,
       "loop": false,
       "tags": [
         "transition"
+      ]
+    },
+    "hop_to_front": {
+      "frames": [
+        "hop_to_front/000.png",
+        "hop_to_front/001.png",
+        "hop_to_front/002.png",
+        "hop_to_front/003.png",
+        "hop_to_front/004.png",
+        "hop_to_front/005.png",
+        "hop_to_front/006.png",
+        "hop_to_front/007.png",
+        "hop_to_front/008.png"
+      ],
+      "fps": 16.0714,
+      "loop": false,
+      "tags": [
+        "transition"
+      ],
+      "durations": [
+        0.07,
+        0.08,
+        0.04,
+        0.05,
+        0.05,
+        0.05,
+        0.06,
+        0.06,
+        0.1
       ]
     },
     "walk_left": {
@@ -221,7 +250,7 @@
         "move",
         "left"
       ],
-      "groundSpeed": 57.29
+      "groundSpeed": 48.774
     },
     "walk_right": {
       "frames": [
@@ -248,26 +277,34 @@
         "move",
         "right"
       ],
-      "groundSpeed": 57.29
+      "groundSpeed": 48.774
     },
     "lie_down": {
       "frames": [
         "lie_down/000.png",
         "lie_down/001.png",
         "lie_down/002.png",
-        "lie_down/003.png"
+        "lie_down/003.png",
+        "lie_down/004.png",
+        "lie_down/005.png",
+        "lie_down/006.png",
+        "lie_down/007.png"
       ],
-      "fps": 2.8571,
+      "fps": 5.1613,
       "loop": false,
       "tags": [
         "transition",
         "side"
       ],
       "durations": [
-        0.35,
-        0.25,
-        0.3,
-        0.5
+        0.24,
+        0.14,
+        0.14,
+        0.15,
+        0.17,
+        0.19,
+        0.22,
+        0.3
       ]
     },
     "sleep": {
@@ -281,13 +318,13 @@
         "sleep/006.png",
         "sleep/007.png",
         "sleep/008.png",
-        "sleep/009.png",
-        "sleep/010.png",
+        "sleep/007.png",
+        "sleep/006.png",
         "sleep/011.png",
         "sleep/012.png",
-        "sleep/013.png",
-        "sleep/014.png",
-        "sleep/015.png"
+        "sleep/003.png",
+        "sleep/002.png",
+        "sleep/001.png"
       ],
       "fps": 4.0,
       "loop": true,
@@ -298,22 +335,30 @@
     },
     "wake_up": {
       "frames": [
-        "wake_up/000.png",
-        "wake_up/001.png",
-        "wake_up/002.png",
-        "wake_up/003.png"
+        "lie_down/007.png",
+        "lie_down/006.png",
+        "lie_down/005.png",
+        "lie_down/004.png",
+        "lie_down/003.png",
+        "lie_down/002.png",
+        "lie_down/001.png",
+        "lie_down/000.png"
       ],
-      "fps": 3.0769,
+      "fps": 5.9701,
       "loop": false,
       "tags": [
         "transition",
         "side"
       ],
       "durations": [
-        0.4,
         0.3,
-        0.25,
-        0.35
+        0.18,
+        0.15,
+        0.13,
+        0.12,
+        0.12,
+        0.12,
+        0.22
       ]
     },
     "groom": {
@@ -323,13 +368,65 @@
         "groom/002.png",
         "groom/003.png",
         "groom/004.png",
-        "groom/005.png"
+        "groom/005.png",
+        "groom/006.png",
+        "groom/006.png",
+        "groom/005.png",
+        "groom/009.png",
+        "groom/009.png",
+        "groom/005.png",
+        "groom/006.png",
+        "groom/006.png",
+        "groom/005.png",
+        "groom/009.png",
+        "groom/009.png",
+        "groom/005.png",
+        "groom/006.png",
+        "groom/006.png",
+        "groom/005.png",
+        "groom/009.png",
+        "groom/009.png",
+        "groom/004.png",
+        "groom/003.png",
+        "groom/002.png",
+        "groom/001.png",
+        "groom/000.png"
       ],
-      "fps": 6.0,
+      "fps": 10.8108,
       "loop": false,
       "tags": [
         "action",
         "front"
+      ],
+      "durations": [
+        0.22,
+        0.07,
+        0.07,
+        0.12,
+        0.14,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.12,
+        0.12,
+        0.07,
+        0.07,
+        0.24
       ]
     },
     "stretch": {
@@ -338,20 +435,30 @@
         "stretch/001.png",
         "stretch/002.png",
         "stretch/003.png",
-        "stretch/004.png"
+        "stretch/004.png",
+        "stretch/005.png",
+        "stretch/006.png",
+        "stretch/007.png",
+        "stretch/008.png",
+        "stretch/009.png"
       ],
-      "fps": 2.381,
+      "fps": 4.6296,
       "loop": false,
       "tags": [
         "action",
         "side"
       ],
       "durations": [
-        0.3,
-        0.3,
-        0.8,
-        0.3,
-        0.4
+        0.2,
+        0.13,
+        0.13,
+        0.15,
+        0.16,
+        0.25,
+        0.5,
+        0.2,
+        0.2,
+        0.24
       ]
     },
     "happy": {
@@ -364,15 +471,15 @@
         "happy/005.png",
         "happy/006.png",
         "happy/007.png",
-        "happy/008.png",
-        "happy/009.png",
-        "happy/010.png",
-        "happy/011.png",
-        "happy/012.png",
-        "happy/013.png",
-        "happy/014.png",
-        "happy/015.png",
-        "happy/016.png"
+        "happy/000.png",
+        "happy/001.png",
+        "happy/002.png",
+        "happy/003.png",
+        "happy/004.png",
+        "happy/005.png",
+        "happy/006.png",
+        "happy/007.png",
+        "happy/000.png"
       ],
       "fps": 14.0,
       "loop": false,
@@ -387,19 +494,19 @@
         "wave/001.png",
         "wave/002.png",
         "wave/003.png",
-        "wave/004.png",
+        "wave/003.png",
         "wave/005.png",
         "wave/006.png",
-        "wave/007.png",
-        "wave/008.png",
-        "wave/009.png",
-        "wave/010.png",
-        "wave/011.png",
-        "wave/012.png",
-        "wave/013.png",
-        "wave/014.png",
-        "wave/015.png",
-        "wave/016.png"
+        "wave/006.png",
+        "wave/005.png",
+        "wave/003.png",
+        "wave/003.png",
+        "wave/005.png",
+        "wave/006.png",
+        "wave/006.png",
+        "wave/002.png",
+        "wave/001.png",
+        "wave/000.png"
       ],
       "fps": 12.2302,
       "loop": false,
@@ -443,9 +550,9 @@
     },
     "feed_wait": {
       "frames": [
-        "feed_wait/000.png",
+        "feed_open/003.png",
         "feed_wait/001.png",
-        "feed_wait/002.png",
+        "feed_open/003.png",
         "feed_wait/003.png"
       ],
       "fps": 3.0,
@@ -457,7 +564,7 @@
     },
     "feed_close": {
       "frames": [
-        "feed_close/000.png",
+        "feed_open/002.png",
         "feed_close/001.png",
         "feed_close/002.png"
       ],
@@ -475,9 +582,15 @@
         "chew/002.png",
         "chew/003.png",
         "chew/004.png",
-        "chew/005.png"
+        "chew/005.png",
+        "chew/002.png",
+        "chew/003.png",
+        "chew/008.png",
+        "chew/009.png",
+        "chew/002.png",
+        "chew/003.png"
       ],
-      "fps": 7.0,
+      "fps": 14.0,
       "loop": true,
       "tags": [
         "action",
@@ -489,7 +602,7 @@
         "swallow/000.png",
         "swallow/001.png",
         "swallow/002.png",
-        "swallow/003.png",
+        "swallow/002.png",
         "swallow/004.png"
       ],
       "fps": 4.0,
@@ -501,7 +614,7 @@
     },
     "held": {
       "frames": [
-        "held/000.png"
+        "head_tilt/003.png"
       ],
       "fps": 1.0,
       "loop": true,
@@ -520,16 +633,32 @@
         "startle/005.png",
         "startle/006.png",
         "startle/007.png",
-        "startle/008.png",
-        "startle/009.png"
+        "startle/006.png",
+        "startle/005.png",
+        "startle/010.png",
+        "startle/011.png"
       ],
-      "fps": 11.0,
+      "fps": 11.8919,
       "loop": false,
       "tags": [
         "reaction",
         "side"
+      ],
+      "durations": [
+        0.05,
+        0.05,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909,
+        0.0909
       ]
     }
   },
-  "sitHeight": 184
+  "sitHeight": 157
 }

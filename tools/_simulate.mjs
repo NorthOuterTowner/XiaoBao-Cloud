@@ -131,7 +131,8 @@ check(
 // up, or feeding it. None of them may turn up in an unattended run -- a cat that
 // chews on its own has found food nobody gave it.
 const FEEDING = ['feed_open', 'feed_wait', 'feed_close', 'chew', 'swallow'];
-const PROMPTED_ONLY = new Set(['held', 'startle', 'head_tilt', ...FEEDING]);
+// hop_to_front only ever follows a startle.
+const PROMPTED_ONLY = new Set(['held', 'startle', 'hop_to_front', 'head_tilt', ...FEEDING]);
 const fedItself = FEEDING.filter((name) => name in time);
 check(fedItself.length === 0, `the cat fed itself unattended: ${fedItself.join(', ')}`);
 check(

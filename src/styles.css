@@ -49,12 +49,14 @@ body.carrying.over-cat {
   pointer-events: none;
 }
 
-/* The treat sits beside the cat and never takes a click: dropping a file is a drag,
-   and the window must not start treating the fish as a drop target of its own.
-   `bottom` is set from JS to the cat's mouth height; the fall below ends there. */
+/* The treat lands in the cat's mouth and never takes a click: dropping a file is a
+   drag, and the window must not start treating the fish as a drop target of its own.
+   `bottom` is set from JS to the cat's mouth height; the fall below ends there.
+   Drawn over the cat (it comes before #cat in the page), or the face would hide it. */
 #treat {
   position: absolute;
   bottom: 0;
+  z-index: 1;
   pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
   animation: treat-drop 620ms linear;

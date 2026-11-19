@@ -26,6 +26,7 @@ Run:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import sys
@@ -128,12 +129,10 @@ SHEETS: list[Sheet] = [
     # No walk sheet: the walk is rigged in code from turn f7, see tools/walk_rig.py.
     # The last generated one, rsrc/raw/enw/Designer (2).png, never alternated its
     # hind legs and only flipped its front paws between up and down.
-    Sheet("sleep", "rsrc/raw/new2/Designer.png", 2, 4, "magenta", "new2",
-          "f0-f3 sit -> lie down -> curl, f4-f7 curled breathing"),
+    # The old sleep and stretch sheets (new2/Designer.png, new2/Designer (2).png) are
+    # gone: lie_down, sleep and stretch now come from the in-between sheets below.
     Sheet("front", "rsrc/raw/new2/Designer (1).png", 2, 4, "magenta", "new2",
           "f0-f3 front sit blink, f4-f7 grooming"),
-    Sheet("yawn", "rsrc/raw/new2/Designer (2).png", 2, 4, "magenta", "new2",
-          "f0-f3 side stretch and yawn, f4-f7 rough jump row"),
     Sheet("run", "rsrc/raw/new2/Designer (4).png", 2, 4, "magenta", "new2",
           "f0-f3 run cycle facing left, f4-f7 front sit waving"),
     # Purpose-drawn startle, side on and facing left, at the enw family's scale: its
@@ -151,6 +150,15 @@ SHEETS: list[Sheet] = [
           "front sit being offered food: f0 neutral -> f3 mouth wide open -> f7 neutral"),
     Sheet("chew", "rsrc/raw/new-10.13/Designer (1).png", 2, 4, "magenta", "feed",
           "front sit eating: f1 a mouthful -> f5 swallow -> f6 licks its muzzle -> f7 content"),
+    # The two in-between sheets drawn from rsrc/PROMPTS.md. Neither has a front sit
+    # to measure a family scale on, so each is matched on the pose it shares with
+    # the rest of the cat: the curl (f7) against the old sleep curl it replaces,
+    # 250px x0.863 = 216 / 247; and the side stand (f0) against turn f7, 334 / 276.
+    Sheet("liedown", "rsrc/raw/new_new.png", 2, 4, "magenta", "enw",
+          "side sit -> sphinx -> curled asleep, facing left", scale=0.874),
+    Sheet("stretch", "rsrc/raw/new_new2.png", 3, 4, "magenta", "enw",
+          "side stand -> play-bow yawn -> hind-leg stretch -> stand, facing left",
+          scale=1.21),
 ]
 
 
@@ -278,6 +286,7 @@ class Frame:
     rgba: np.ndarray  # HxWx4 uint8, tightly trimmed
     sheet: str
     index: int
+    cell_cx: float = 0.0  # centre x within its grid cell, sheet px
 
     @property
     def width(self) -> int:
@@ -356,7 +365,11 @@ def slice_sheet(sheet: Sheet) -> list[Frame]:
         aa = rgba[..., 3]
         ys, xs = np.nonzero(aa > 2)
         rgba = rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-        frames.append(Frame(rgba, sheet.key, i))
+        # Where the frame's centre sat inside its own grid cell, for actions that
+        # keep the sheet's own horizontal layout (see Action.keep_x).
+        cell_left = (i % sheet.cols) * w / sheet.cols
+        cx = x0 + xs.min() + rgba.shape[1] / 2 - cell_left
+        frames.append(Frame(rgba, sheet.key, i, cx))
 
     if dropped:
         print(f"      dropped {dropped} gridline/border blob(s)")
@@ -372,17 +385,23 @@ def reference_height(frames: list[Frame], which: tuple[int, ...]) -> float:
     return float(np.median([frames[i].height for i in which]))
 
 
-def place(frame: Frame, scale: float, mirror: bool) -> Image.Image:
-    """Scale a trimmed frame and bottom/centre-align it on the shared canvas."""
+def place(frame: Frame, scale: float, mirror: bool, dx: float = 0.0) -> Image.Image:
+    """Scale a trimmed frame and bottom/centre-align it on the shared canvas, shifted
+    `dx` canvas px off centre."""
     src = Image.fromarray(frame.rgba, "RGBA")
     if mirror:
         src = src.transpose(Image.FLIP_LEFT_RIGHT)
+        dx = -dx
     tw = max(1, round(src.width * scale))
     th = max(1, round(src.height * scale))
     src = src.resize((tw, th), Image.LANCZOS)
 
+    x = round((CANVAS - tw) / 2 + dx)
+    if x < 0 or x + tw > CANVAS:
+        raise RuntimeError(f"{frame.sheet}[{frame.index}] would leave the canvas "
+                           f"(x {x}..{x + tw}); reduce its keep_x shift")
     canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    canvas.alpha_composite(src, (max(0, round((CANVAS - tw) / 2)), max(0, BASELINE - th)))
+    canvas.alpha_composite(src, (x, max(0, BASELINE - th)))
     return canvas
 
 
@@ -445,6 +464,12 @@ class Action:
     rig: str | None = None
     # Seconds per frame, overriding `fps`, so key poses can hold and in-betweens fly.
     durations: list[float] | None = None
+    # Keep each frame where the sheet drew it inside its cell, instead of re-centring
+    # every frame on its own bounding box. For one-sheet sequences whose outline
+    # changes a lot (front paws reaching out, a leg kicking back): re-centring would
+    # slide the planted paws about. The named frame is the one placed dead centre,
+    # normally the one shared with the neighbouring animation.
+    keep_x: tuple[str, int] | None = None
 
 
 def _rig_walk(sheets):
@@ -462,10 +487,18 @@ RIGS = {
     "walk": (("turn", 7), _rig_walk),
     "sit": (("tilt", 0), lambda s: pose_rig.rig_sit(s["tilt"][0].rgba)),
     "stand": (("stand", 7), lambda s: pose_rig.rig_stand(s["stand"][7].rgba)),
-    "sleep": (("sleep", 3), lambda s: pose_rig.rig_sleep(s["sleep"][3].rgba)),
+    # The curl lie_down ends on, so falling asleep has no cut. Ear tip (170, 15),
+    # base along row ~72; the head is the left 220px, the back the rest.
+    "sleep": (("liedown", 7), lambda s: pose_rig.rig_sleep(
+        s["liedown"][7].rgba, back=(150, 260), ear_x=(136, 206), ear_rows=(80, 42),
+        ear_pivot=(172, 74))),
     "happy": (("front", 3), lambda s: pose_rig.rig_happy(s["front"][3].rgba)),
     "wave": (("run", 4), lambda s: pose_rig.rig_wave(
         s["run"][4].rgba, s["run"][5].rgba, s["run"][7].rgba)),
+    "groom": (("front", 4), lambda s: pose_rig.rig_groom(
+        s["front"][0].rgba, s["front"][4].rgba, s["front"][5].rgba, s["front"][6].rgba)),
+    "chew": (("chew", 1), lambda s: pose_rig.rig_chew(
+        [f.rgba for f in s["chew"]], [1, 2, 3, 2, 4, 2])),
 }
 
 ACTIONS: list[Action] = [
@@ -505,16 +538,24 @@ ACTIONS: list[Action] = [
 
     # ---- turning. The turn sheet is one continuous sweep, so a right turn is just
     # the first half played backwards from the front pose.
-    Action("turn_left", [("turn", 4), ("turn", 5), ("turn", 6), ("turn", 7)],
+    #
+    # None of them shows the turn sheet's own front pose (f4). The stand before and
+    # the sit_down after are the stand sheet's front stand, a different drawing of
+    # that same pose; showing both back to back was a swap with the cat standing
+    # still. Leaving f4 out puts the swap on a step of the rotation instead, where
+    # the picture is meant to change.
+    Action("turn_left", [("turn", 5), ("turn", 6), ("turn", 7)],
            fps=8.0, loop=False, tags=["transition"]),
-    Action("turn_right", [("turn", 4), ("turn", 3), ("turn", 2), ("turn", 1),
-                          ("turn", 0)],
+    Action("turn_right", [("turn", 3), ("turn", 2), ("turn", 1), ("turn", 0)],
            fps=8.0, loop=False, tags=["transition"]),
-    Action("face_front_from_left", [("turn", 7), ("turn", 6), ("turn", 5), ("turn", 4)],
+    Action("face_front_from_left", [("turn", 7), ("turn", 6), ("turn", 5)],
            fps=8.0, loop=False, tags=["transition"]),
     Action("face_front_from_right", [("turn", 0), ("turn", 1), ("turn", 2),
-                                     ("turn", 3), ("turn", 4)],
+                                     ("turn", 3)],
            fps=8.0, loop=False, tags=["transition"]),
+    # After a startle: a hop round to face front, landing on the front stand that
+    # sit_down starts from. Built in add_motion.
+    Action("hop_to_front", [], loop=False, tags=["transition"]),
 
     # ---- walking: rigged, not drawn (tools/walk_rig.py). Faces left; the right
     # cycle is the same frames mirrored. --------------------------------------------
@@ -523,27 +564,30 @@ ACTIONS: list[Action] = [
            tags=["move", "right"]),
 
     # ---- sleeping ------------------------------------------------------------------
-    # Four far-apart poses, so each one is held long enough to read as a deliberate
-    # settling-down rather than four quick jumps; the curl is held longest.
-    Action("lie_down", [("sleep", 0), ("sleep", 1), ("sleep", 2), ("sleep", 3)],
-           loop=False, durations=[0.35, 0.25, 0.30, 0.50],
-           tags=["transition", "side"]),
-    # One drawn curl, breathing (tools/pose_rig.py). The drawn breathing frames f4-f7
-    # were each a slightly different cat, so the loop shimmered instead of breathing.
+    # Eight evenly spaced poses from the in-between sheet (rsrc/raw/new_new.png):
+    # side sit, paws walking forward, sphinx, head down, curled. Laid out as drawn,
+    # so the haunches stay put as the front end lowers; centred on the curl, which
+    # is the frame the sleep loop starts from.
+    Action("lie_down", [("liedown", i) for i in range(8)], loop=False,
+           durations=[0.24, 0.14, 0.14, 0.15, 0.17, 0.19, 0.22, 0.30],
+           keep_x=("liedown", 7), tags=["transition", "side"]),
+    # The curl, breathing (tools/pose_rig.py).
     Action("sleep", [], loop=True, rig="sleep", tags=["idle", "side"]),
-    Action("wake_up", [("sleep", 3), ("sleep", 2), ("sleep", 1), ("sleep", 0)],
-           loop=False, durations=[0.40, 0.30, 0.25, 0.35],
-           tags=["transition", "side"]),
+    Action("wake_up", [("liedown", i) for i in range(7, -1, -1)], loop=False,
+           durations=[0.30, 0.18, 0.15, 0.13, 0.12, 0.12, 0.12, 0.22],
+           keep_x=("liedown", 7), tags=["transition", "side"]),
 
     # ---- flavour -------------------------------------------------------------------
-    Action("groom", [("front", 4), ("front", 5), ("front", 6), ("front", 6),
-                     ("front", 5), ("front", 4)],
-           fps=6.0, loop=False, tags=["action", "front"]),
-    # Into the bow, a long hold on the yawn at the bottom of it, back up.
-    Action("stretch", [("yawn", 0), ("yawn", 1), ("yawn", 2), ("yawn", 1),
-                       ("yawn", 3)],
-           loop=False, durations=[0.30, 0.30, 0.80, 0.30, 0.40],
-           tags=["action", "side"]),
+    # Paw up, three licks, paw down (tools/pose_rig.py).
+    Action("groom", [], loop=False, rig="groom", tags=["action", "front"]),
+    # From the in-between sheet (rsrc/raw/new_new2.png): front paws slide out into a
+    # play-bow, a big yawn held at the bottom, back up, stand. Laid out as drawn so
+    # the hind paws stay planted through the bow. The sheet's f9-f10 (a hind leg
+    # kicked out behind and drawn back in) are left out on purpose.
+    Action("stretch", [("stretch", i) for i in (0, 1, 2, 3, 4, 5, 6, 7, 8, 11)],
+           loop=False,
+           durations=[0.20, 0.13, 0.13, 0.15, 0.16, 0.25, 0.50, 0.20, 0.20, 0.24],
+           keep_x=("stretch", 0), tags=["action", "side"]),
     # Two happy hops with the head rocking (tools/pose_rig.py).
     Action("happy", [], loop=False, rig="happy", tags=["reaction", "front"]),
     # Paw up, waved twice, paw down (tools/pose_rig.py).
@@ -564,10 +608,8 @@ ACTIONS: list[Action] = [
     # Nothing arrived, or the user cancelled: close up and go back to sitting.
     Action("feed_close", [("feed", 2), ("feed", 6), ("feed", 7)],
            fps=7.0, loop=False, tags=["transition", "front"]),
-    # Jaw working on a mouthful, with the content half-closed eyes between chews.
-    Action("chew", [("chew", 1), ("chew", 2), ("chew", 3), ("chew", 2),
-                    ("chew", 4), ("chew", 2)],
-           fps=7.0, loop=True, tags=["action", "front"]),
+    # Jaw working on a mouthful, the head nodding with each chew (tools/pose_rig.py).
+    Action("chew", [], loop=True, rig="chew", tags=["action", "front"]),
     # Head up to get it down, a lick of the muzzle, then back to neutral so `sit`
     # can take over.
     Action("swallow", [("chew", 5), ("chew", 6), ("chew", 7), ("chew", 7),
@@ -653,8 +695,15 @@ def render_actions(sheets: dict[str, list[Frame]], rel: dict[str, float],
             extra = {k: round(v * drawn, 3) for k, v in rig.extra.items()}
             out[action.name] = Rendered(images, rig.fps, rig.durations, extra)
         else:
-            images = [place(sheets[k][i], rel[k] * global_scale, action.mirror)
-                      for k, i in action.picks]
+            ref_cx = None
+            if action.keep_x:
+                ak, ai = action.keep_x
+                ref_cx = sheets[ak][ai].cell_cx
+            images = []
+            for k, i in action.picks:
+                f, s = sheets[k][i], rel[k] * global_scale
+                dx = (f.cell_cx - ref_cx) * s if ref_cx is not None and k == action.keep_x[0] else 0.0
+                images.append(place(f, s, action.mirror, dx))
             out[action.name] = Rendered(images, action.fps, action.durations, {})
         r = out[action.name]
         if r.durations is not None:
@@ -663,6 +712,105 @@ def render_actions(sheets: dict[str, list[Frame]], rel: dict[str, float],
                                    f"{len(r.images)} frames")
             r.fps = len(r.images) / sum(r.durations)
     return out
+
+
+# =====================================================================================
+# Body motion at the drawing swaps
+# =====================================================================================
+#
+# Several moves hand over between sheets that drew the same pose differently (the
+# startle's side stand, the turn sheet, the stand sheet, the front sit). A swap
+# while the cat is still reads as the picture changing. Animators hide a cut
+# inside motion instead, and the motion here is real body movement -- a crouch
+# before a hop, an impact squash on landing, a plop as the haunches hit the floor
+# -- with the swap falling at the fastest moment of it. Nothing is morphed: every
+# frame is a drawn frame, only squashed, stretched or lifted as a whole about the
+# point where its paws meet the ground.
+
+
+def paws_x(img: Image.Image) -> float:
+    """Alpha centre of the bottom 18% of the cat: where it stands."""
+    a = np.asarray(img)[..., 3] > 40
+    ys = np.nonzero(a.any(axis=1))[0]
+    top, bot = int(ys.min()), int(ys.max())
+    return float(np.nonzero(a[int(bot - 0.18 * (bot - top)):bot + 1])[1].mean())
+
+
+def body(img: Image.Image, sy: float = 1.0, sx: float = 1.0, lift: float = 0.0,
+         dx: float = 0.0) -> Image.Image:
+    """The frame scaled by (sx, sy) about its paws on the ground line, then raised
+    `lift` px and moved `dx` px sideways. sy < 1 with sx > 1 is a squash, the
+    reverse a stretch; volume roughly kept, as a body does."""
+    px = paws_x(img)
+    # Output (x, y) shows source (a*x + c, e*y + f).
+    a, e = 1.0 / sx, 1.0 / sy
+    c = px - (px + dx) * a
+    f = BASELINE - (BASELINE - lift) * e
+    out = img.transform(img.size, Image.AFFINE, (a, 0, c, 0, e, f), Image.BICUBIC)
+    if np.asarray(out)[..., 3].astype(int).sum() < np.asarray(img)[..., 3].astype(int).sum() * 0.97 * sx * sy:
+        raise RuntimeError("a squash/hop frame was clipped by the sprite canvas")
+    return out
+
+
+def add_motion(rendered: dict[str, "Rendered"], sheets: dict[str, list[Frame]],
+               rel: dict[str, float], global_scale: float) -> None:
+    def frame(key, idx):
+        return place(sheets[key][idx], rel[key] * global_scale, False)
+
+    def timing(r):
+        return list(r.durations) if r.durations else [1.0 / r.fps] * len(r.images)
+
+    # ---- landing: the impact squashes the cat before it bristles ---------------
+    r = rendered["startle"]
+    first, before = r.images[0], timing(r)
+    r.images = [body(first, 0.86, 1.08), body(first, 0.95, 1.03)] + r.images
+    r.durations = [0.05, 0.05] + before
+
+    # ---- after the startle: a hop round to face front --------------------------
+    # Crouch, spring, turn in the air through the turn sheet's three-quarter views,
+    # come down on the stand sheet's front stand -- the frame sit_down starts from
+    # -- and absorb the landing. The cat travels from where its side-on paws were
+    # to where the front stand's are, as a hop would.
+    side = rendered["startle"].images[-1]
+    t6, t5, front = frame("turn", 6), frame("turn", 5), rendered["sit_down"].images[0]
+    x0 = 0.0
+    x1 = paws_x(front) - paws_x(side)
+
+    def at(img, t):
+        """Shift `img` so its paws sit fraction t of the way from start to end."""
+        return x0 + (x1 - x0) * t - (paws_x(img) - paws_x(side))
+
+    hop = [
+        (side, 0.94, 1.03, 0, 0.0, 0.07),
+        (side, 0.88, 1.06, 0, 0.0, 0.08),   # crouch
+        (side, 1.06, 0.97, 7, 0.15, 0.04),  # spring
+        (t6, 1.04, 0.98, 15, 0.4, 0.05),
+        (t5, 1.00, 1.00, 18, 0.65, 0.05),   # top of the hop, mid-turn
+        (front, 1.03, 0.98, 10, 0.9, 0.05),
+        (front, 0.90, 1.05, 0, 1.0, 0.06),  # land
+        (front, 1.03, 0.99, 0, 1.0, 0.06),
+        (front, 1.00, 1.00, 0, 1.0, 0.10),
+    ]
+    r = rendered["hop_to_front"]
+    r.images = [body(img, sy, sx, lift, at(img, t) if img is not side else 0.0)
+                for img, sy, sx, lift, t, _ in hop]
+    r.durations = [d for *_, d in hop]
+
+    # ---- standing up: a crouch first, a push up through the swap ---------------
+    r = rendered["stand_up"]
+    sit = rendered["sit"].images[0]
+    r.images = [body(sit, 0.95, 1.025), body(r.images[0], 1.03, 0.985)] + r.images[1:]
+    r.durations = [0.08, 0.06] + timing(r)[1:]
+
+    # ---- sitting down: the haunches plop onto the floor, then the sit -----------
+    r = rendered["sit_down"]
+    last = r.images[-1]
+    r.images = r.images + [body(last, 0.94, 1.03)]
+    r.durations = timing(r) + [0.06]
+
+    for r in rendered.values():
+        if r.durations:
+            r.fps = len(r.images) / sum(r.durations)
 
 
 def main() -> None:
@@ -698,6 +846,18 @@ def main() -> None:
 
     # ---- one global scale on top, so nothing clips the canvas ---------------------
     worst_w = max(f.width * rel[k] for k, fs in sheets.items() for f in fs)
+    # A keep_x action places frames off centre, so it needs room either side of the
+    # centre line for its furthest-reaching frame, not just for its widest one.
+    for action in load_actions():
+        if not action.keep_x:
+            continue
+        ak, ai = action.keep_x
+        ref_cx = sheets[ak][ai].cell_cx
+        for k, i in action.picks:
+            f = sheets[k][i]
+            off = f.cell_cx - ref_cx if k == ak else 0.0
+            reach = abs(off) + f.width / 2
+            worst_w = max(worst_w, 2 * reach * rel[k])
     worst_h = max(f.height * rel[k] for k, fs in sheets.items() for f in fs)
     global_scale = min((CANVAS - 2 * MARGIN) / worst_w, (BASELINE - MARGIN) / worst_h)
     print(f"\nglobal scale {global_scale:.4f} "
@@ -706,6 +866,7 @@ def main() -> None:
     actions = load_actions()
     # Render first: a failure here must not leave assets/sprites deleted.
     rendered = render_actions(sheets, rel, global_scale, actions)
+    add_motion(rendered, sheets, rel, global_scale)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
@@ -717,16 +878,24 @@ def main() -> None:
     }
 
     drawn_height: dict[str, list[int]] = {}
+    # A frame that is pixel-for-pixel the same as one already written is not written
+    # again: the manifest points at the first copy. A third of all frames are repeats
+    # -- sit_down is stand_up backwards, wake_up is lie_down backwards, loops repeat
+    # their key poses -- and they were a third of the installer's art.
+    written: dict[bytes, str] = {}
 
     for action in actions:
-        folder = OUT / action.name
-        folder.mkdir(parents=True, exist_ok=True)
         files = []
         heights = []
         r = rendered[action.name]
         for i, img in enumerate(r.images):
-            rel_path = f"{action.name}/{i:03d}.png"
-            img.save(OUT / rel_path)
+            key = hashlib.sha1(img.tobytes()).digest()
+            rel_path = written.get(key)
+            if rel_path is None:
+                rel_path = f"{action.name}/{i:03d}.png"
+                (OUT / action.name).mkdir(parents=True, exist_ok=True)
+                img.save(OUT / rel_path)
+                written[key] = rel_path
             files.append(rel_path)
             rows = np.nonzero(np.asarray(img)[..., 3] > 24)[0]
             heights.append(int(rows.max() - rows.min() + 1) if len(rows) else 0)
@@ -766,7 +935,7 @@ def main() -> None:
     )
     total = sum(len(a["frames"]) for a in manifest["actions"].values())
     print(f"\nwrote {total} frames across {len(actions)} actions "
-          f"-> {OUT.relative_to(ROOT)}")
+          f"({len(written)} unique images) -> {OUT.relative_to(ROOT)}")
 
     build_qa(rendered, actions)
 
@@ -778,10 +947,11 @@ def main() -> None:
 # down, which is not the frame it hands over on.
 HANDOVER_FRAMES = [
     ("stand", 0, "front stand (stand sheet)"),
-    ("turn_left", 0, "front stand (turn sheet)"),
+    ("turn_left", 0, "three-quarter stand (turn sheet)"),
     ("face_front_from_left", 0, "left profile stand"),
     ("walk_left", 0, "walking side-on"),
-    ("startle", 0, "startle entry stand"),
+    # Frame 2: frames 0-1 are the landing squash added in add_motion.
+    ("startle", 2, "startle entry stand"),
     ("startle", -1, "startle exit stand"),
 ]
 

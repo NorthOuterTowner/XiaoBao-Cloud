@@ -214,26 +214,31 @@ def rig_stand(src: np.ndarray) -> Rigged:
     return Rigged(src.shape[1], src.shape[0], p, frames, fps)
 
 
-def rig_sleep(src: np.ndarray) -> Rigged:
+def rig_sleep(src: np.ndarray, *, back=(70, 170), ear_x=(118, 205),
+              ear_rows=(90, 55), ear_pivot=(160, 88)) -> Rigged:
     """Curled up asleep: the back slowly rising and falling, one ear twitch.
 
-    sleep f3, 347x250, the curl facing left. The head is the left third and stays
-    nearly still; the back (the top of the ball, right of x~110) does the breathing."""
+    The curl faces left. The head is the left third and stays nearly still; the back
+    (the top of the ball, weighted from `back[0]` to `back[1]` across) does the
+    breathing. The defaults are for the old sleep f3; the lie_down sheet's last frame
+    passes its own ear position."""
     p, n, fps = PAD, 16, 4.0
+    h = src.shape[0]
     img = premultiply(pad(src, p))
     X, Y = grid(img.shape[:2])
-    rise = smooth(250 + p, 40 + p, Y) * (0.25 + 0.75 * smooth(70 + p, 170 + p, X))
-    # The upright ear on top of the head: tip (155, 30), base along row 85.
-    ear_w = smooth(90 + p, 55 + p, Y) * bell(118 + p, 205 + p, X)
+    rise = smooth(h + p, 40 + p, Y) * (0.25 + 0.75 * smooth(back[0] + p, back[1] + p, X))
+    # The upright ear on top of the head, fading out below its base row.
+    ear_w = smooth(ear_rows[0] + p, ear_rows[1] + p, Y) * bell(ear_x[0] + p, ear_x[1] + p, X)
     ear_keys = [(0.0, 0.0), (10, 0.0), (10.6, 8.0), (11.4, -3.0), (12.4, 0.0), (n, 0.0)]
     frames = [pad(src, p)]
     for k in range(1, n):
         b = breath(k / n)
-        sx = (200 + p) + (X - (200 + p)) / (1.0 + 0.022 * b * smooth(60 + p, 160 + p, X))
+        cx = src.shape[1] * 0.58 + p
+        sx = cx + (X - cx) / (1.0 + 0.022 * b * smooth(back[0] + p, back[1] + p, X))
         sy = Y + 6.0 * b * rise
         a = keyframes(ear_keys, k)
         if a:
-            sx, sy = rotate_back(sx, sy, (160 + p, 88 + p), a, ear_w)
+            sx, sy = rotate_back(sx, sy, (ear_pivot[0] + p, ear_pivot[1] + p), a, ear_w)
         frames.append(unpremultiply(sample(img, sx, sy)))
     return Rigged(src.shape[1], src.shape[0], p, frames, fps)
 
@@ -333,3 +338,120 @@ def rig_wave(raised: np.ndarray, half: np.ndarray, neutral: np.ndarray) -> Rigge
     durations = [0.12, 0.10, 0.08] + [0.07] * len(swings) + [0.08, 0.10, 0.14]
     return Rigged(raised.shape[1], raised.shape[0], p, frames,
                   fps=len(frames) / sum(durations), durations=durations)
+
+
+def align_bottom(ref: np.ndarray, other: np.ndarray, band: int = 110, r: int = 10):
+    """(dx, dy) to paste `other` at, relative to `ref`'s top-left, so their lower
+    bodies (haunches and paws on the ground) line up. Heads are left free -- they are
+    what moves between these frames."""
+    rh, rw = ref.shape[:2]
+    oh, ow = other.shape[:2]
+    a = ref[rh - band:rh, 20:rw - 20, 3].astype(np.float32)
+    best = None
+    for dy in range(-6, 7):
+        for dx in range(-r, r + 1):
+            # Row rh-band of ref corresponds to row (rh-band) - (rh-oh+dy) of other.
+            y0 = rh - band - (rh - oh + dy)
+            x0 = 20 - dx
+            if y0 < 0 or x0 < 0 or y0 + band > oh or x0 + a.shape[1] > ow:
+                continue
+            b = other[y0:y0 + band, x0:x0 + a.shape[1], 3].astype(np.float32)
+            e = np.abs(a - b).mean()
+            if best is None or e < best[0]:
+                best = (e, dx, rh - oh + dy)
+    if best is None:
+        return 0, rh - oh
+    return best[1], best[2]
+
+
+# Groom, front f4 (303x379): the raised paw to the left of the chest, toes along row
+# ~250, its top at row ~195; the forearm runs down into the chest below row 262.
+GROOM_PAW = ((34, 225), (40, 205), (55, 195), (85, 193), (102, 203), (108, 222),
+             (106, 262), (104, 300), (42, 300), (36, 262))
+
+
+def rig_groom(neutral: np.ndarray, raised: np.ndarray, near: np.ndarray,
+              lick: np.ndarray) -> Rigged:
+    """Sit, lift a paw, lick it a few times, put it back down, sit.
+
+    Drawn frames: neutral sit (front f0), paw raised (f4), paw at the mouth (f5),
+    licking (f6). All are lined up on f4's lower body, so the haunches and paws stop
+    shuffling between frames. The lift and the lowering get two rigged in-betweens --
+    f4's paw slid down towards the floor over the neutral frame's chest fur -- and
+    the lick is a loop on f6: the paw strokes up against the tongue while the head
+    dips into it, three times."""
+    p = PAD
+    shape = (raised.shape[0] + 2 * p, raised.shape[1] + 2 * p)
+    up = pad(raised, p)
+    rest = paste(neutral, shape, *align_bottom(raised, neutral), p)
+    mid = paste(near, shape, *align_bottom(raised, near), p)
+    lk = paste(lick, shape, *align_bottom(raised, lick), p)
+    X, Y = grid(shape)
+
+    # ---- the lift: f4's paw lowered by 2/3 and 1/3 of the way to the floor -------
+    up_f, rest_f = premultiply(up), premultiply(rest)
+    m = poly_mask(shape, GROOM_PAW, p)[..., None]
+    soft = np.clip(ndimage.gaussian_filter(m[..., 0].astype(np.float32), 4.0) * 1.6 - 0.3,
+                   0.0, 1.0)[..., None] * m
+    under = up_f * (1 - soft) + rest_f * soft
+    paw = up_f * m
+    # The paw moves most, the forearm's root at the elbow hardly at all.
+    reach = smooth(322 + p, 205 + p, Y)
+    lowered = []
+    for d in (34.0, 17.0):
+        layer = sample(paw, X, Y - d * reach)
+        lowered.append(unpremultiply(over(layer, under)))
+
+    # ---- the lick loop on f6 ------------------------------------------------------
+    lk_f = premultiply(lk)
+    # Offsets of f6 inside the padded frame, so its own coordinates can be used.
+    dx6, dy6 = align_bottom(raised, lick)
+    ox, oy = p + dx6, p + dy6
+    paw_w = bell(28 + ox, 125 + ox, X) * bell(165 + oy, 275 + oy, Y)
+    head_w = smooth(215 + oy, 160 + oy, Y)
+    licks = []
+    for k in range(6):
+        s = math.sin(2 * math.pi * k / 6)
+        up_px = 5.0 * max(s, 0.0) + 1.5 * min(s, 0.0)
+        sx, sy = X, Y + up_px * paw_w
+        # The head dips into the stroke and tips slightly towards the paw.
+        sy = sy - 2.0 * max(s, 0.0) * head_w
+        sx, sy = rotate_back(sx, sy, (150 + ox, 230 + oy), -2.0 * max(s, 0.0), head_w)
+        licks.append(unpremultiply(sample(lk_f, sx, sy)) if k else lk)
+
+    frames = [rest, lowered[0], lowered[1], up, mid, *(licks * 3), mid, up,
+              lowered[1], lowered[0], rest]
+    durations = ([0.22, 0.07, 0.07, 0.12, 0.14] + [0.075] * 18
+                 + [0.12, 0.12, 0.07, 0.07, 0.24])
+    return Rigged(raised.shape[1], raised.shape[0], p, frames,
+                  fps=len(frames) / sum(durations), durations=durations)
+
+
+def rig_chew(frames_src: list[np.ndarray], order: list[int]) -> Rigged:
+    """Jaw working on a mouthful, the head nodding with it.
+
+    The drawn chew frames (chew sheet, 331x366-ish, chin at row ~180) only move the
+    jaw. Each is lined up on the first one's lower body, then the head is pushed
+    down a few px on every closed-jaw frame and lifted a touch on the open ones, with
+    a half-way frame in between so the nod reads as motion rather than a hop."""
+    p = PAD
+    ref = frames_src[order[0]]
+    shape = (ref.shape[0] + 2 * p, ref.shape[1] + 2 * p)
+    X, Y = grid(shape)
+    placed = {}
+    for i in set(order):
+        dx, dy = align_bottom(ref, frames_src[i]) if i != order[0] else (0, 0)
+        placed[i] = (premultiply(paste(frames_src[i], shape, dx, dy, p)), dy)
+
+    # Closed jaw (the cheeks-full frame, sheet f2) nods down; the others lift.
+    def nod(i):
+        return 3.5 if i == 2 else -1.0
+
+    out = []
+    for a, b in zip(order, order[1:] + order[:1]):
+        for half in (0.0, 0.5):
+            img, dy = placed[a]
+            n = nod(a) * (1 - half) + nod(b) * half if half else nod(a)
+            head_w = smooth(240 + p + dy, 170 + p + dy, Y)
+            out.append(unpremultiply(sample(img, X, Y - n * head_w)))
+    return Rigged(ref.shape[1], ref.shape[0], p, out, fps=14.0)

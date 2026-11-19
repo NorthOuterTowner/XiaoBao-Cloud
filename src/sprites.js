@@ -65,7 +65,9 @@ export async function loadSprites(base) {
   // Every frame of every action through one bounded queue, rather than all ~220 at
   // once; see loadImage.
   const entries = Object.entries(manifest.actions);
-  const all = entries.flatMap(([, spec]) => spec.frames);
+  // Unique paths: the pipeline stores a repeated frame once and points every use of
+  // it at that one file.
+  const all = [...new Set(entries.flatMap(([, spec]) => spec.frames))];
   const images = await mapLimited(all, LOAD_CONCURRENCY, (rel) => loadImage(base + rel));
   const byPath = new Map(all.map((rel, i) => [rel, images[i]]));
 
