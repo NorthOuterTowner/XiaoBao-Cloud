@@ -30,7 +30,7 @@ const HIT_ALPHA = 24;
 // hardcoded box size silently resizes the cat. The manifest reports how tall the
 // resting sit was actually drawn, which is what makes this stable.
 const TARGET_SIT_HEIGHT = 124;
-// Walk speed in screen pixels per second, a bit under half the cat's height.
+// Fallback walk speed in screen px/s, for a manifest without a rigged walk.
 const WALK_SPEED = 51;
 // How far to the side of the cat's centre a heart pops, in screen pixels.
 const HEART_OFFSET = 48;
@@ -54,6 +54,15 @@ const HEARTBEAT_SECONDS = 0.4;
 // mouseup over the taskbar can go missing. If a drag goes completely idle this long,
 // assume the button was let go somewhere we could not see and drop the cat.
 const DRAG_IDLE_LIMIT_SECONDS = 5;
+// While carried the cat hangs from the point it was grabbed and swings like a
+// pendulum: dragging it sideways makes it lag behind (degrees of lean per px/s of
+// sideways speed, up to SWING_MAX), and it sways back and forth a little when the
+// hand stops. Stiffness and damping are the spring's; slightly underdamped, so a
+// stop gives one or two visible swings rather than a wobble that never settles.
+const SWING_PER_SPEED = 0.03;
+const SWING_MAX = 22;
+const SWING_STIFFNESS = 90;
+const SWING_DAMPING = 9;
 
 const catEl = document.getElementById('cat');
 const ctx = catEl.getContext('2d');
@@ -82,6 +91,10 @@ let beatIn = 0;
 // Set on mousedown over the cat; becomes a drag once the mouse moves far enough.
 let press = null;
 
+// The carried cat's swing: angle in degrees (clockwise), its rate, the smoothed
+// sideways speed driving it, and the pivot (the grab point, in box pixels).
+const swing = { angle: 0, rate: 0, vx: 0, lastX: null, pivotX: 0, pivotY: 0 };
+
 // True between dropping a file and the native side coming back with the user's
 // answer. A leave can follow a successful drop, and acting on it would snap the
 // cat's mouth shut while the confirmation is still up.
@@ -109,6 +122,16 @@ function relayoutForSize() {
   }
 }
 
+/**
+ * Walk speed in screen px/s. The walk is rigged so a planted paw slides back at the
+ * manifest's groundSpeed (canvas px/s); scaled to the render box, that is exactly the
+ * speed that keeps the paws still on the floor, at any cat size.
+ */
+function walkSpeed() {
+  const ground = sprites.clips.walk_left?.groundSpeed;
+  return ground ? (ground * stage.catSize) / sprites.canvas : WALK_SPEED;
+}
+
 function applyStage(info) {
   stage = { ...stage, ...info, catSize: catBoxSize() };
   const size = stage.catSize;
@@ -128,7 +151,7 @@ function applyStage(info) {
   shownImage = null; // force the hit mask to be redrawn at the new size
 
   if (brain) {
-    brain.setBounds(0, Math.max(0, stage.width - size), WALK_SPEED);
+    brain.setBounds(0, Math.max(0, stage.width - size), walkSpeed());
   }
 }
 
@@ -144,9 +167,27 @@ function catTop() {
 
 // ---- drawing --------------------------------------------------------------------------
 
+let missingFrameReported = false;
+
 function draw(dt) {
   const clip = sprites.clips[brain.action];
-  const image = frameAt(clip, brain.elapsed);
+  const image = clip && frameAt(clip, brain.elapsed);
+  if (!image) {
+    // Never hand drawImage nothing: it throws, and a throw here used to end the frame
+    // loop for good, leaving no cat and no error on screen. Report it once instead.
+    if (!missingFrameReported) {
+      missingFrameReported = true;
+      console.error('cat: no frame to draw', {
+        action: brain.action,
+        elapsed: brain.elapsed,
+        frames: clip?.frames.length,
+        missing: clip?.frames.filter((f) => !f).length,
+        fps: clip?.fps,
+        seconds: clip?.seconds,
+      });
+    }
+    return;
+  }
 
   if (brain.seq !== lastSeq) {
     fadeFrom = shownImage;
@@ -184,7 +225,59 @@ function draw(dt) {
     hitCtx.drawImage(image, 0, 0, size, size);
   }
 
-  catEl.style.transform = `translate(${Math.round(brain.x)}px, ${-Math.round(brain.y)}px)`;
+  updateSwing(dt);
+  const move = `translate(${Math.round(brain.x)}px, ${-Math.round(brain.y)}px)`;
+  if (swing.angle) {
+    catEl.style.transformOrigin = `${swing.pivotX}px ${swing.pivotY}px`;
+    catEl.style.transform = `${move} rotate(${swing.angle.toFixed(2)}deg)`;
+  } else {
+    catEl.style.transform = move;
+  }
+}
+
+/**
+ * Pendulum swing while the cat is carried. Moving it right drags the pivot right
+ * and leaves the body behind, which is a clockwise lean (bottom to the left); the
+ * spring then brings it back under the hand. Once dropped it springs upright fast,
+ * so it is level by the time it lands.
+ */
+function updateSwing(dt) {
+  if (brain.held) {
+    if (swing.lastX === null) {
+      swing.lastX = brain.x;
+      swing.vx = 0;
+      if (press) {
+        swing.pivotX = press.offsetX;
+        swing.pivotY = press.offsetY;
+      }
+    }
+    const raw = dt > 0 ? (brain.x - swing.lastX) / dt : 0;
+    swing.lastX = brain.x;
+    // Smoothed over ~80ms: mousemove arrives in bursts, raw speed is spiky.
+    swing.vx += (raw - swing.vx) * Math.min(1, dt * 12);
+  } else {
+    swing.lastX = null;
+    swing.vx = 0;
+  }
+
+  const target = brain.held
+    ? Math.max(-SWING_MAX, Math.min(SWING_MAX, swing.vx * SWING_PER_SPEED))
+    : 0;
+  // Stiffer and better damped once let go, so the cat lands upright.
+  const k = brain.held ? SWING_STIFFNESS : SWING_STIFFNESS * 3;
+  const c = brain.held ? SWING_DAMPING : SWING_DAMPING * 2.5;
+  // Semi-implicit Euler, in small steps so a long frame cannot blow it up.
+  const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+  const h = dt / steps;
+  for (let i = 0; i < steps; i += 1) {
+    swing.rate += (k * (target - swing.angle) - c * swing.rate) * h;
+    swing.angle += swing.rate * h;
+  }
+  swing.angle = Math.max(-SWING_MAX * 1.5, Math.min(SWING_MAX * 1.5, swing.angle));
+  if (!brain.held && Math.abs(swing.angle) < 0.05 && Math.abs(swing.rate) < 0.5) {
+    swing.angle = 0;
+    swing.rate = 0;
+  }
 }
 
 // ---- mouse ----------------------------------------------------------------------------
@@ -504,7 +597,7 @@ async function main() {
     clips: sprites.clips,
     minX: 0,
     maxX: Math.max(0, stage.width - stage.catSize),
-    walkSpeed: WALK_SPEED,
+    walkSpeed: walkSpeed(),
   });
   if (info.paused) brain.setPaused(true);
 
@@ -535,9 +628,17 @@ async function main() {
 
   let last = performance.now();
   const tick = (now) => {
+    // Scheduled first, so an exception anywhere below costs one frame rather than
+    // stopping the cat for good.
+    requestAnimationFrame(tick);
     // Measured delta, never a fixed step: a dropped or throttled frame must not
     // stretch the animation or slow the walk.
-    const dt = Math.min((now - last) / 1000, 0.1);
+    //
+    // Never negative. requestAnimationFrame passes the time the frame *started*,
+    // which can be earlier than the performance.now() taken just before the first
+    // frame was requested. That made the first dt slightly negative, the clip's
+    // elapsed time negative, and the frame index -1 -- no frame at all.
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.1));
     last = now;
     // Self-heal a drag whose mouseup never arrived, before it can lock the desktop.
     if (press && now - lastDragMove > DRAG_IDLE_LIMIT_SECONDS * 1000) {
@@ -558,8 +659,6 @@ async function main() {
         window.pet.heartbeat();
       }
     }
-
-    requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }

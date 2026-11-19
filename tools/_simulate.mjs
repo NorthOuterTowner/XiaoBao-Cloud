@@ -16,7 +16,10 @@ for (const [name, spec] of Object.entries(manifest.actions)) {
     loop: spec.loop,
     fps: spec.fps,
     frames: spec.frames,
-    seconds: spec.frames.length / spec.fps,
+    // Same rule as src/sprites.js: per-frame durations win over fps.
+    seconds: spec.durations
+      ? spec.durations.reduce((a, b) => a + b, 0)
+      : spec.frames.length / spec.fps,
   };
 }
 

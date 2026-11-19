@@ -36,6 +36,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
+import pose_rig
+import walk_rig
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets" / "sprites"
 CHECK = ROOT / "rsrc" / "_check"
@@ -122,8 +125,9 @@ SHEETS: list[Sheet] = [
     # living in the new3 folder.
     Sheet("turn", "rsrc/raw/new3/Designer (1).png", 2, 4, "magenta", "enw",
           "continuous turn: f0 right profile -> f4 front -> f7 left profile"),
-    Sheet("walk", "rsrc/raw/enw/Designer (2).png", 2, 4, "magenta", "enw",
-          "8-frame side walk cycle facing left"),
+    # No walk sheet: the walk is rigged in code from turn f7, see tools/walk_rig.py.
+    # The last generated one, rsrc/raw/enw/Designer (2).png, never alternated its
+    # hind legs and only flipped its front paws between up and down.
     Sheet("sleep", "rsrc/raw/new2/Designer.png", 2, 4, "magenta", "new2",
           "f0-f3 sit -> lie down -> curl, f4-f7 curled breathing"),
     Sheet("front", "rsrc/raw/new2/Designer (1).png", 2, 4, "magenta", "new2",
@@ -437,12 +441,39 @@ class Action:
     loop: bool = True
     mirror: bool = False
     tags: list[str] = field(default_factory=list)
+    # Frames come from the named entry in RIGS instead of `picks`.
+    rig: str | None = None
+    # Seconds per frame, overriding `fps`, so key poses can hold and in-betweens fly.
+    durations: list[float] | None = None
 
+
+def _rig_walk(sheets):
+    src = sheets["turn"][7]
+    return pose_rig.Rigged(src.width, src.height, walk_rig.PAD,
+                           walk_rig.WalkRig(src.rgba).frames(), walk_rig.FPS,
+                           extra={"groundSpeed": walk_rig.GROUND_SPEED})
+
+
+# Each rig, the source frame it is anchored on, and how it is built. Placing a rig
+# exactly where its source frame is placed is what makes it hand over seamlessly to
+# the drawn animations that share that frame: turn f7 for the walk, the plain sit,
+# the stand's top frame, the curled-up sleep.
+RIGS = {
+    "walk": (("turn", 7), _rig_walk),
+    "sit": (("tilt", 0), lambda s: pose_rig.rig_sit(s["tilt"][0].rgba)),
+    "stand": (("stand", 7), lambda s: pose_rig.rig_stand(s["stand"][7].rgba)),
+    "sleep": (("sleep", 3), lambda s: pose_rig.rig_sleep(s["sleep"][3].rgba)),
+    "happy": (("front", 3), lambda s: pose_rig.rig_happy(s["front"][3].rgba)),
+    "wave": (("run", 4), lambda s: pose_rig.rig_wave(
+        s["run"][4].rgba, s["run"][5].rgba, s["run"][7].rgba)),
+}
 
 ACTIONS: list[Action] = [
     # ---- default resting state ----------------------------------------------------
-    # The crouched front sit. This is where the cat lives by default.
-    Action("sit", [("tilt", 0)], fps=1.0, loop=True, tags=["idle", "front"]),
+    # The crouched front sit, where the cat lives by default: breathing, with an ear
+    # flick now and then (tools/pose_rig.py). f0 is the drawn sit untouched, which
+    # blink and head_tilt start from.
+    Action("sit", [], loop=True, rig="sit", tags=["idle", "front"]),
     Action("blink", [("tilt", 0), ("tilt", 1), ("tilt", 2), ("tilt", 3),
                      ("tilt", 2), ("tilt", 1), ("tilt", 0)],
            fps=12.0, loop=False, tags=["accent", "front"]),
@@ -459,13 +490,18 @@ ACTIONS: list[Action] = [
     # the tilt sheet (179px). f2 is a deeper crouch than the cat ever rests in, so
     # ending there made it sink 5% below the sit and then pop back up the instant the
     # resting pose took over -- on every single sit-down and stand-up.
+    # Eased: a beat on the starting pose, through the middle quickly, settling on
+    # the end pose, instead of five evenly spaced pops.
     Action("stand_up", [("stand", 3), ("stand", 4), ("stand", 5), ("stand", 6),
                         ("stand", 7)],
-           fps=7.0, loop=False, tags=["transition", "front"]),
+           loop=False, durations=[0.14, 0.09, 0.08, 0.09, 0.16],
+           tags=["transition", "front"]),
     Action("sit_down", [("stand", 7), ("stand", 6), ("stand", 5), ("stand", 4),
                         ("stand", 3)],
-           fps=7.0, loop=False, tags=["transition", "front"]),
-    Action("stand", [("stand", 7)], fps=1.0, loop=True, tags=["idle", "front"]),
+           loop=False, durations=[0.12, 0.09, 0.08, 0.10, 0.18],
+           tags=["transition", "front"]),
+    # Standing still: breathing, the tail swaying behind the head.
+    Action("stand", [], loop=True, rig="stand", tags=["idle", "front"]),
 
     # ---- turning. The turn sheet is one continuous sweep, so a right turn is just
     # the first half played backwards from the front pose.
@@ -480,35 +516,38 @@ ACTIONS: list[Action] = [
                                      ("turn", 3), ("turn", 4)],
            fps=8.0, loop=False, tags=["transition"]),
 
-    # ---- walking. Source art faces left, so the right cycle is mirrored. ----------
-    Action("walk_left", [("walk", i) for i in range(8)],
-           fps=9.0, loop=True, tags=["move", "left"]),
-    Action("walk_right", [("walk", i) for i in range(8)],
-           fps=9.0, loop=True, mirror=True, tags=["move", "right"]),
+    # ---- walking: rigged, not drawn (tools/walk_rig.py). Faces left; the right
+    # cycle is the same frames mirrored. --------------------------------------------
+    Action("walk_left", [], loop=True, rig="walk", tags=["move", "left"]),
+    Action("walk_right", [], loop=True, mirror=True, rig="walk",
+           tags=["move", "right"]),
 
     # ---- sleeping ------------------------------------------------------------------
+    # Four far-apart poses, so each one is held long enough to read as a deliberate
+    # settling-down rather than four quick jumps; the curl is held longest.
     Action("lie_down", [("sleep", 0), ("sleep", 1), ("sleep", 2), ("sleep", 3)],
-           fps=4.0, loop=False, tags=["transition", "side"]),
-    Action("sleep", [("sleep", 3), ("sleep", 4), ("sleep", 5), ("sleep", 6),
-                     ("sleep", 7), ("sleep", 6), ("sleep", 5), ("sleep", 4)],
-           fps=2.0, loop=True, tags=["idle", "side"]),
+           loop=False, durations=[0.35, 0.25, 0.30, 0.50],
+           tags=["transition", "side"]),
+    # One drawn curl, breathing (tools/pose_rig.py). The drawn breathing frames f4-f7
+    # were each a slightly different cat, so the loop shimmered instead of breathing.
+    Action("sleep", [], loop=True, rig="sleep", tags=["idle", "side"]),
     Action("wake_up", [("sleep", 3), ("sleep", 2), ("sleep", 1), ("sleep", 0)],
-           fps=4.0, loop=False, tags=["transition", "side"]),
+           loop=False, durations=[0.40, 0.30, 0.25, 0.35],
+           tags=["transition", "side"]),
 
     # ---- flavour -------------------------------------------------------------------
     Action("groom", [("front", 4), ("front", 5), ("front", 6), ("front", 6),
                      ("front", 5), ("front", 4)],
            fps=6.0, loop=False, tags=["action", "front"]),
-    Action("stretch", [("yawn", 0), ("yawn", 1), ("yawn", 2), ("yawn", 2),
-                       ("yawn", 1), ("yawn", 3)],
-           fps=4.0, loop=False, tags=["action", "side"]),
-    Action("happy", [("front", 3), ("front", 2), ("front", 3), ("front", 2),
-                     ("front", 3)],
-           fps=5.0, loop=False, tags=["reaction", "front"]),
-    # Waving a paw from the front sit: neutral, up, down, up, down, neutral.
-    Action("wave", [("run", 7), ("run", 4), ("run", 5), ("run", 6), ("run", 5),
-                    ("run", 7)],
-           fps=7.0, loop=False, tags=["action", "front"]),
+    # Into the bow, a long hold on the yawn at the bottom of it, back up.
+    Action("stretch", [("yawn", 0), ("yawn", 1), ("yawn", 2), ("yawn", 1),
+                       ("yawn", 3)],
+           loop=False, durations=[0.30, 0.30, 0.80, 0.30, 0.40],
+           tags=["action", "side"]),
+    # Two happy hops with the head rocking (tools/pose_rig.py).
+    Action("happy", [], loop=False, rig="happy", tags=["reaction", "front"]),
+    # Paw up, waved twice, paw down (tools/pose_rig.py).
+    Action("wave", [], loop=False, rig="wave", tags=["action", "front"]),
 
     # ---- being fed -----------------------------------------------------------------
     #
@@ -554,6 +593,78 @@ def load_actions() -> list[Action]:
     return ACTIONS
 
 
+def place_rigged(padded: np.ndarray, src_w: int, src_h: int, pad: int, scale: float,
+                 mirror: bool) -> Image.Image:
+    """Place a rig frame exactly where `place` puts the frame it was rigged from.
+
+    A rig frame is that source frame plus `pad` of margin all round, with legs, tail
+    or paw reaching into the margin. `place` would re-centre every frame on its own
+    bounding box, so the body would shuffle as they move; this applies the source
+    frame's own scale and offset to every frame instead, so the body holds still and
+    a planted paw stays put."""
+    tw = max(1, round(src_w * scale))
+    th = max(1, round(src_h * scale))
+    sx, sy = tw / src_w, th / src_h
+    # Floored so the source box never reaches outside the padded frame.
+    po, qo = int(pad * sx), int(pad * sy)
+    box = (pad - po / sx, pad - qo / sy, pad + src_w + po / sx, pad + src_h + qo / sy)
+    src = Image.fromarray(padded, "RGBA").resize((tw + 2 * po, th + 2 * qo),
+                                                 Image.LANCZOS, box=box)
+    if mirror:
+        src = src.transpose(Image.FLIP_LEFT_RIGHT)
+
+    x0 = max(0, round((CANVAS - tw) / 2)) - po
+    y0 = max(0, BASELINE - th) - qo
+    big = Image.new("RGBA", (CANVAS + 2 * po, CANVAS + 2 * qo), (0, 0, 0, 0))
+    big.alpha_composite(src, (x0 + po, y0 + qo))
+    canvas = big.crop((po, qo, po + CANVAS, qo + CANVAS))
+    lost = np.asarray(big)[..., 3].astype(int).sum() - np.asarray(canvas)[..., 3].astype(int).sum()
+    if lost > 255 * 4:
+        raise RuntimeError("a rig frame reaches past the sprite canvas; tone down "
+                           "that rig's motion")
+    return canvas
+
+
+@dataclass
+class Rendered:
+    images: list[Image.Image]
+    fps: float
+    durations: list[float] | None
+    # Rig extras already converted to canvas units (e.g. the walk's groundSpeed).
+    extra: dict
+
+
+def render_actions(sheets: dict[str, list[Frame]], rel: dict[str, float],
+                   global_scale: float, actions: list[Action]) -> dict[str, Rendered]:
+    """Every action's frames, placed on the shared canvas, with its timing."""
+    built: dict[str, pose_rig.Rigged] = {}
+    out: dict[str, Rendered] = {}
+    for action in actions:
+        if action.rig:
+            (src_key, _), build = RIGS[action.rig]
+            if action.rig not in built:
+                built[action.rig] = build(sheets)
+            rig = built[action.rig]
+            scale = rel[src_key] * global_scale
+            images = [place_rigged(f, rig.anchor_w, rig.anchor_h, rig.pad, scale,
+                                   action.mirror) for f in rig.frames]
+            # The size the source frame is actually drawn at, as `place` rounds it.
+            drawn = round(rig.anchor_w * scale) / rig.anchor_w
+            extra = {k: round(v * drawn, 3) for k, v in rig.extra.items()}
+            out[action.name] = Rendered(images, rig.fps, rig.durations, extra)
+        else:
+            images = [place(sheets[k][i], rel[k] * global_scale, action.mirror)
+                      for k, i in action.picks]
+            out[action.name] = Rendered(images, action.fps, action.durations, {})
+        r = out[action.name]
+        if r.durations is not None:
+            if len(r.durations) != len(r.images):
+                raise RuntimeError(f"{action.name}: {len(r.durations)} durations for "
+                                   f"{len(r.images)} frames")
+            r.fps = len(r.images) / sum(r.durations)
+    return out
+
+
 def main() -> None:
     probe_only = "--probe" in sys.argv
 
@@ -593,6 +704,8 @@ def main() -> None:
           f"(largest normalised pose {worst_w:.0f}x{worst_h:.0f})")
 
     actions = load_actions()
+    # Render first: a failure here must not leave assets/sprites deleted.
+    rendered = render_actions(sheets, rel, global_scale, actions)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
@@ -610,32 +723,41 @@ def main() -> None:
         folder.mkdir(parents=True, exist_ok=True)
         files = []
         heights = []
-        for i, (sheet_key, idx) in enumerate(action.picks):
-            frame = sheets[sheet_key][idx]
-            img = place(frame, rel[sheet_key] * global_scale, action.mirror)
+        r = rendered[action.name]
+        for i, img in enumerate(r.images):
             rel_path = f"{action.name}/{i:03d}.png"
             img.save(OUT / rel_path)
             files.append(rel_path)
             rows = np.nonzero(np.asarray(img)[..., 3] > 24)[0]
             heights.append(int(rows.max() - rows.min() + 1) if len(rows) else 0)
         drawn_height[action.name] = heights
-        manifest["actions"][action.name] = {
+        spec = {
             "frames": files,
-            "fps": action.fps,
+            "fps": round(r.fps, 4),
             "loop": action.loop,
             "tags": action.tags,
         }
+        if r.durations is not None:
+            # Seconds per frame; the app prefers this over fps when present.
+            spec["durations"] = [round(d, 4) for d in r.durations]
+        # The walk's groundSpeed: canvas px/s a planted paw slides back. The app must
+        # move the cat at exactly this (times its render scale) or the feet skate.
+        spec.update(r.extra)
+        manifest["actions"][action.name] = spec
         flags = "".join(
-            [" loop" if action.loop else "", " mirrored" if action.mirror else ""]
+            [" loop" if action.loop else "", " mirrored" if action.mirror else "",
+             f" rig:{action.rig}" if action.rig else "",
+             " timed" if r.durations else ""]
         )
-        print(f"  {action.name:<16} {len(files):2d} frames @ {action.fps:>4}fps"
+        print(f"  {action.name:<16} {len(files):2d} frames @ {r.fps:5.1f}fps"
               f"  h{min(heights)}-{max(heights)}{flags}")
 
     # How tall the resting sit is actually drawn, so the app can size its render box
     # to put the cat at a chosen number of screen pixels. Without this the renderer
     # has to hardcode a box size that silently goes wrong whenever the global scale
-    # moves -- which it does whenever a sheet is added or redrawn.
-    manifest["sitHeight"] = max(drawn_height["sit"])
+    # moves -- which it does whenever a sheet is added or redrawn. Taken from the
+    # drawn sit (the breathing loop's f0) so a deeper breath cannot resize the cat.
+    manifest["sitHeight"] = drawn_height["sit"][0]
 
     report_scale_continuity(drawn_height)
 
@@ -646,7 +768,7 @@ def main() -> None:
     print(f"\nwrote {total} frames across {len(actions)} actions "
           f"-> {OUT.relative_to(ROOT)}")
 
-    build_qa(sheets, rel, global_scale, actions)
+    build_qa(rendered, actions)
 
 
 # The exact frames that hand over from one animation to the next, where a scale
@@ -715,12 +837,7 @@ def report_scale_continuity(drawn_height: dict[str, list[int]]) -> None:
               f"all taller than a sit")
 
 
-def build_qa(
-    sheets: dict[str, list[Frame]],
-    rel: dict[str, float],
-    global_scale: float,
-    actions: list[Action],
-) -> None:
+def build_qa(rendered: dict[str, Rendered], actions: list[Action]) -> None:
     out = CHECK / "actions"
     out.mkdir(parents=True, exist_ok=True)
 
@@ -732,12 +849,11 @@ def build_qa(
                 px[x, y] = (205, 205, 215, 255)
 
     for action in actions:
+        r = rendered[action.name]
         tiles = []
-        for sheet_key, idx in action.picks:
+        for img in r.images:
             tile = checker.copy()
-            tile.alpha_composite(
-                place(sheets[sheet_key][idx], rel[sheet_key] * global_scale, action.mirror)
-            )
+            tile.alpha_composite(img)
             tiles.append(tile)
 
         strip = Image.new("RGB", (CANVAS * len(tiles), CANVAS))
@@ -747,11 +863,13 @@ def build_qa(
 
         if len(tiles) > 1:
             gif = [t.convert("P", palette=Image.ADAPTIVE) for t in tiles]
+            ms = ([round(1000 * d) for d in r.durations] if r.durations
+                  else round(1000 / r.fps))
             gif[0].save(
                 out / f"{action.name}.gif",
                 save_all=True,
                 append_images=gif[1:],
-                duration=int(1000 / action.fps),
+                duration=ms,
                 loop=0,
                 disposal=2,
             )
@@ -764,17 +882,11 @@ def build_qa(
         ("turn_right", -1), ("walk_right", 0),
         ("lie_down", -1), ("sleep", 0), ("stretch", 1),
     ]
-    by_name = {a.name: a for a in actions}
     strip = Image.new("RGB", (CANVAS * len(handover), CANVAS + 16), (250, 250, 252))
     draw = ImageDraw.Draw(strip)
     for i, (name, idx) in enumerate(handover):
-        action = by_name[name]
-        sheet_key, frame_idx = action.picks[idx]
         tile = checker.copy()
-        tile.alpha_composite(
-            place(sheets[sheet_key][frame_idx], rel[sheet_key] * global_scale,
-                  action.mirror)
-        )
+        tile.alpha_composite(rendered[name].images[idx])
         strip.paste(tile.convert("RGB"), (i * CANVAS, 0))
         # Mark the shared ground line so drift is obvious.
         draw.line([(i * CANVAS, BASELINE), (i * CANVAS + CANVAS, BASELINE)],

@@ -4,9 +4,32 @@
   "actions": {
     "sit": {
       "frames": [
-        "sit/000.png"
+        "sit/000.png",
+        "sit/001.png",
+        "sit/002.png",
+        "sit/003.png",
+        "sit/004.png",
+        "sit/005.png",
+        "sit/006.png",
+        "sit/007.png",
+        "sit/008.png",
+        "sit/009.png",
+        "sit/010.png",
+        "sit/011.png",
+        "sit/012.png",
+        "sit/013.png",
+        "sit/014.png",
+        "sit/015.png",
+        "sit/016.png",
+        "sit/017.png",
+        "sit/018.png",
+        "sit/019.png",
+        "sit/020.png",
+        "sit/021.png",
+        "sit/022.png",
+        "sit/023.png"
       ],
-      "fps": 1.0,
+      "fps": 8.0,
       "loop": true,
       "tags": [
         "idle",
@@ -57,11 +80,18 @@
         "stand_up/003.png",
         "stand_up/004.png"
       ],
-      "fps": 7.0,
+      "fps": 8.9286,
       "loop": false,
       "tags": [
         "transition",
         "front"
+      ],
+      "durations": [
+        0.14,
+        0.09,
+        0.08,
+        0.09,
+        0.16
       ]
     },
     "sit_down": {
@@ -72,18 +102,40 @@
         "sit_down/003.png",
         "sit_down/004.png"
       ],
-      "fps": 7.0,
+      "fps": 8.7719,
       "loop": false,
       "tags": [
         "transition",
         "front"
+      ],
+      "durations": [
+        0.12,
+        0.09,
+        0.08,
+        0.1,
+        0.18
       ]
     },
     "stand": {
       "frames": [
-        "stand/000.png"
+        "stand/000.png",
+        "stand/001.png",
+        "stand/002.png",
+        "stand/003.png",
+        "stand/004.png",
+        "stand/005.png",
+        "stand/006.png",
+        "stand/007.png",
+        "stand/008.png",
+        "stand/009.png",
+        "stand/010.png",
+        "stand/011.png",
+        "stand/012.png",
+        "stand/013.png",
+        "stand/014.png",
+        "stand/015.png"
       ],
-      "fps": 1.0,
+      "fps": 8.0,
       "loop": true,
       "tags": [
         "idle",
@@ -153,14 +205,23 @@
         "walk_left/004.png",
         "walk_left/005.png",
         "walk_left/006.png",
-        "walk_left/007.png"
+        "walk_left/007.png",
+        "walk_left/008.png",
+        "walk_left/009.png",
+        "walk_left/010.png",
+        "walk_left/011.png",
+        "walk_left/012.png",
+        "walk_left/013.png",
+        "walk_left/014.png",
+        "walk_left/015.png"
       ],
-      "fps": 9.0,
+      "fps": 24.0,
       "loop": true,
       "tags": [
         "move",
         "left"
-      ]
+      ],
+      "groundSpeed": 57.29
     },
     "walk_right": {
       "frames": [
@@ -171,14 +232,23 @@
         "walk_right/004.png",
         "walk_right/005.png",
         "walk_right/006.png",
-        "walk_right/007.png"
+        "walk_right/007.png",
+        "walk_right/008.png",
+        "walk_right/009.png",
+        "walk_right/010.png",
+        "walk_right/011.png",
+        "walk_right/012.png",
+        "walk_right/013.png",
+        "walk_right/014.png",
+        "walk_right/015.png"
       ],
-      "fps": 9.0,
+      "fps": 24.0,
       "loop": true,
       "tags": [
         "move",
         "right"
-      ]
+      ],
+      "groundSpeed": 57.29
     },
     "lie_down": {
       "frames": [
@@ -187,11 +257,17 @@
         "lie_down/002.png",
         "lie_down/003.png"
       ],
-      "fps": 4.0,
+      "fps": 2.8571,
       "loop": false,
       "tags": [
         "transition",
         "side"
+      ],
+      "durations": [
+        0.35,
+        0.25,
+        0.3,
+        0.5
       ]
     },
     "sleep": {
@@ -203,9 +279,17 @@
         "sleep/004.png",
         "sleep/005.png",
         "sleep/006.png",
-        "sleep/007.png"
+        "sleep/007.png",
+        "sleep/008.png",
+        "sleep/009.png",
+        "sleep/010.png",
+        "sleep/011.png",
+        "sleep/012.png",
+        "sleep/013.png",
+        "sleep/014.png",
+        "sleep/015.png"
       ],
-      "fps": 2.0,
+      "fps": 4.0,
       "loop": true,
       "tags": [
         "idle",
@@ -219,11 +303,17 @@
         "wake_up/002.png",
         "wake_up/003.png"
       ],
-      "fps": 4.0,
+      "fps": 3.0769,
       "loop": false,
       "tags": [
         "transition",
         "side"
+      ],
+      "durations": [
+        0.4,
+        0.3,
+        0.25,
+        0.35
       ]
     },
     "groom": {
@@ -248,14 +338,20 @@
         "stretch/001.png",
         "stretch/002.png",
         "stretch/003.png",
-        "stretch/004.png",
-        "stretch/005.png"
+        "stretch/004.png"
       ],
-      "fps": 4.0,
+      "fps": 2.381,
       "loop": false,
       "tags": [
         "action",
         "side"
+      ],
+      "durations": [
+        0.3,
+        0.3,
+        0.8,
+        0.3,
+        0.4
       ]
     },
     "happy": {
@@ -264,9 +360,21 @@
         "happy/001.png",
         "happy/002.png",
         "happy/003.png",
-        "happy/004.png"
+        "happy/004.png",
+        "happy/005.png",
+        "happy/006.png",
+        "happy/007.png",
+        "happy/008.png",
+        "happy/009.png",
+        "happy/010.png",
+        "happy/011.png",
+        "happy/012.png",
+        "happy/013.png",
+        "happy/014.png",
+        "happy/015.png",
+        "happy/016.png"
       ],
-      "fps": 5.0,
+      "fps": 14.0,
       "loop": false,
       "tags": [
         "reaction",
@@ -280,13 +388,43 @@
         "wave/002.png",
         "wave/003.png",
         "wave/004.png",
-        "wave/005.png"
+        "wave/005.png",
+        "wave/006.png",
+        "wave/007.png",
+        "wave/008.png",
+        "wave/009.png",
+        "wave/010.png",
+        "wave/011.png",
+        "wave/012.png",
+        "wave/013.png",
+        "wave/014.png",
+        "wave/015.png",
+        "wave/016.png"
       ],
-      "fps": 7.0,
+      "fps": 12.2302,
       "loop": false,
       "tags": [
         "action",
         "front"
+      ],
+      "durations": [
+        0.12,
+        0.1,
+        0.08,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.07,
+        0.08,
+        0.1,
+        0.14
       ]
     },
     "feed_open": {
