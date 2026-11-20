@@ -502,6 +502,9 @@ function placeTreat() {
     // Showing the element is what starts the drop animation, so set this first.
     treatEl.style.setProperty('--drop', `${-(window.innerHeight - mouthBottom)}px`);
     treatEl.hidden = false;
+    // Only when a fish starts to drop, not on each bite (those swap the image of a
+    // treat already showing), so one fish makes one sound.
+    audio.play('giveFish');
   }
   if (treatEl.getAttribute('src') !== src) treatEl.setAttribute('src', src);
   if (left !== treatLeft) {

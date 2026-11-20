@@ -19,14 +19,28 @@
 const BASE = '../assets/audio/';
 
 /**
- * clip -> { file, loop }. Keyed by what it is, not by the action, so the action
- * mapping below stays readable.
+ * clip -> { files, loop }. Keyed by what it is, not by the action, so the action
+ * mapping below stays readable. A clip with several files plays one of them at
+ * random each time, never the same one twice in a row, so a cat that gets cross
+ * or falls asleep often does not sound like a recording.
  */
 const CLIPS = {
-  meow: { file: 'meow.mp3', loop: false },
-  meowAngry: { file: 'meow-angry.mp3', loop: false },
-  walk: { file: 'walk.mp3', loop: true },
-  purr: { file: 'purr-sleep.mp3', loop: true },
+  meow: { files: ['meow.mp3'], loop: false },
+  meowAngry: {
+    files: [
+      'meow-angry.mp3',
+      'meow-angry-extra1.mp3',
+      'meow-angry-extra2.mp3',
+      'meow-angry-extra3.mp3',
+      'meow-angry-extra4.mp3',
+    ],
+    loop: false,
+  },
+  walk: { files: ['walk.mp3'], loop: true },
+  purr: { files: ['purr-sleep.mp3', 'purr-sleep2.mp3'], loop: true },
+  // The fish landing in front of the cat. Not tied to an action: the renderer
+  // plays it the moment the treat appears (see `play`).
+  giveFish: { files: ['give-fish-sound.mp3'], loop: false },
 };
 
 /**
@@ -50,14 +64,24 @@ export class Audio_ {
     /** The looping clip currently playing, so it can be stopped on an action change. */
     this.loopingKey = null;
 
+    /** clip -> its variants, one <audio> each. */
     this.clips = {};
-    for (const [key, { file, loop }] of Object.entries(CLIPS)) {
-      const audio = new Audio(BASE + file);
-      audio.loop = loop;
-      audio.preload = 'auto';
-      this.clips[key] = audio;
+    /** clip -> the variant playing (or last played), for stopping and no-repeat. */
+    this.current = {};
+    for (const [key, { files, loop }] of Object.entries(CLIPS)) {
+      this.clips[key] = files.map((file) => {
+        const audio = new Audio(BASE + file);
+        audio.loop = loop;
+        audio.preload = 'auto';
+        return audio;
+      });
     }
     this._applyVolume();
+  }
+
+  /** Play a one-shot clip by name, outside the action mapping (e.g. 'giveFish'). */
+  play(key) {
+    if (this.clips[key]) this._play(key, true);
   }
 
   /** 0..1. Also unmutes implicitly -- a drag off zero is how you turn sound back on. */
@@ -68,7 +92,9 @@ export class Audio_ {
 
   _applyVolume() {
     const level = this.muted ? 0 : this.volume;
-    for (const audio of Object.values(this.clips)) audio.volume = level;
+    for (const variants of Object.values(this.clips)) {
+      for (const audio of variants) audio.volume = level;
+    }
   }
 
   /**
@@ -103,9 +129,22 @@ export class Audio_ {
     }
   }
 
+  /** A random variant of `key`, avoiding the one played last time when there is a choice. */
+  _pick(key) {
+    const variants = this.clips[key];
+    if (variants.length === 1) return variants[0];
+    const others = variants.filter((a) => a !== this.current[key]);
+    return others[Math.floor(Math.random() * others.length)];
+  }
+
   _play(key, fromStart = false) {
     if (this.volume <= 0 && !this.muted) return; // nothing to hear anyway
-    const audio = this.clips[key];
+    // A one-shot fired again while the previous take is still going cuts it off,
+    // rather than two meows overlapping.
+    const previous = this.current[key];
+    if (previous && !previous.paused && fromStart) previous.pause();
+    const audio = this._pick(key);
+    this.current[key] = audio;
     if (fromStart) audio.currentTime = 0;
     const played = audio.play();
     // Autoplay refusal before the first gesture rejects the promise; swallow it so a
@@ -114,7 +153,8 @@ export class Audio_ {
   }
 
   _stop(key) {
-    const audio = this.clips[key];
+    const audio = this.current[key];
+    if (!audio) return;
     audio.pause();
     audio.currentTime = 0;
   }
