@@ -77,6 +77,27 @@ try {
   await page.evaluate(() => { const b = window.__catDebug.brain; b._enqueue([{ action: 'walk_left', hold: 5, vx: -40 }]); });
   await page.waitForTimeout(500);
   await page.locator('#cat').screenshot({ path: path.join(out, 'app-walk.png') });
+  // Break reminder: make the eye reminder due while the cat walks; it should sit,
+  // wave, and ask. Answer "later", read the reply, then check the snooze prompt.
+  await page.evaluate(() => { window.__catDebug.reminders.kinds.eyes.left = 0; });
+  await page.waitForFunction(() => window.__catDebug.bubble.open, null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  report.reminder = await page.evaluate(() => ({
+    action: window.__catDebug.brain.action,
+    text: document.querySelector('.bubble-text').textContent,
+    buttons: [...document.querySelectorAll('.bubble-choices button')].map((b) => b.textContent),
+  }));
+  await page.screenshot({ path: path.join(out, 'app-remind.png') });
+  await page.click('.bubble-choices button[data-choice="later"]');
+  report.reply = await page.evaluate(() => document.querySelector('.bubble-text').textContent);
+  await page.screenshot({ path: path.join(out, 'app-remind-reply.png') });
+  await page.waitForFunction(() => !window.__catDebug.bubble.open, null, { timeout: 8000 });
+  await page.evaluate(() => { const r = window.__catDebug.reminders; r.gap = 0; r.kinds.eyes.left = 0; });
+  await page.waitForFunction(() => window.__catDebug.bubble.open, null, { timeout: 15000 });
+  report.snoozed = await page.evaluate(() => document.querySelector('.bubble-text').textContent);
+  // Unanswered: gone by itself after 15 s.
+  await page.waitForFunction(() => !window.__catDebug.bubble.open, null, { timeout: 20000 });
+  report.timedOut = await page.evaluate(() => ({ busy: window.__catDebug.reminders.kinds.eyes.busy, left: Math.round(window.__catDebug.reminders.kinds.eyes.left) }));
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

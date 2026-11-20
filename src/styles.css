@@ -209,3 +209,109 @@ body.carrying.over-cat {
 .settings-close:hover {
   background: #5d87d8;
 }
+
+/* ---- Reminder bubble ----------------------------------------------------------------
+
+   Placed from JS over the cat's head every frame, so it follows the cat if it is
+   picked up mid-reminder. Like the Settings panel it only takes the mouse while the
+   cursor is on it. */
+#bubble {
+  position: absolute;
+  max-width: 260px;
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fffaf2;
+  border: 1px solid rgba(120, 95, 70, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  color: #4a3a2e;
+  font: 13px/1.5 "Microsoft YaHei UI", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  z-index: 9;
+}
+
+#bubble[hidden] {
+  display: none;
+}
+
+#bubble.pop {
+  animation: bubble-pop 180ms ease-out;
+}
+
+@keyframes bubble-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.bubble-text {
+  margin: 0;
+}
+
+.bubble-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.bubble-choices[hidden] {
+  display: none;
+}
+
+.bubble-choices button {
+  padding: 5px 10px;
+  border: 1px solid rgba(120, 95, 70, 0.3);
+  border-radius: 8px;
+  background: #f3e7d6;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bubble-choices button:hover,
+.bubble-choices button:focus-visible {
+  background: #ead6bb;
+  outline: none;
+}
+
+.bubble-choices button:first-child {
+  background: #f6d9a8;
+}
+
+.bubble-choices button:first-child:hover {
+  background: #f0c886;
+}
+
+/* The little pointer under the bubble, aimed at the cat; `left` is set from JS. */
+.bubble-tail {
+  position: absolute;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #fffaf2;
+  border-right: 1px solid rgba(120, 95, 70, 0.35);
+  border-bottom: 1px solid rgba(120, 95, 70, 0.35);
+  transform: rotate(45deg);
+}
+
+/* Reminder settings: a checkbox and an interval slider per reminder. */
+.settings-section {
+  margin: 16px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(140, 170, 220, 0.18);
+  color: #cbd6e8;
+  font-weight: 600;
+}
+
+.settings-row input[type='checkbox'] {
+  justify-self: start;
+  accent-color: #7fb0ff;
+  cursor: pointer;
+}

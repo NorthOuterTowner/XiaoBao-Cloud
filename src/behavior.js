@@ -57,6 +57,8 @@ const FISH_SPREAD = 70;
 const FISH_BITES = 3;
 // The poses where the cat is waiting to be fed and an offer can still be cancelled.
 const OPEN_MOUTHED = new Set(['feed_open', 'feed_wait']);
+// Every step of a meal, which a break reminder must not interrupt.
+const EATING = new Set(['feed_open', 'feed_wait', 'feed_close', 'chew', 'swallow']);
 
 // Actions that leave the cat up on its feet; it has to sit back down before any of
 // the front-facing sitting animations will read correctly.
@@ -104,6 +106,9 @@ export class Brain {
     // either in the cat's mouth or given up on. The view draws the treat from this,
     // so there is one source of truth for whether there is anything out there.
     this.offer = null;
+    // True from remind() until endRemind(), or until a grab cancels the sit it set
+    // up. The view watches it to know the reminder is still being delivered.
+    this.attending = false;
 
     // Bumped on every action change so the view can trigger a cross-fade.
     this.seq = 0;
@@ -230,6 +235,7 @@ export class Brain {
     // Picked up mid-meal: whatever was on offer is forgotten, and the view stops
     // drawing it.
     this.offer = null;
+    this.attending = false;
     this.queue = [];
     this.energy = Math.min(1, this.energy + 0.05);
     this._begin({ action: HELD, hold: Infinity });
@@ -397,6 +403,42 @@ export class Brain {
 
   setPaused(paused) {
     this.paused = paused;
+  }
+
+  // ---- break reminders -------------------------------------------------------------
+
+  /**
+   * Whether the cat is free to deliver a break reminder: not paused, not in the air,
+   * not in the middle of a meal. Anything else (walking, sleeping, grooming) it can
+   * drop to come and wave.
+   */
+  get canRemind() {
+    return !this.paused && !this.airborne && !this.offer && !EATING.has(this.action);
+  }
+
+  /**
+   * Sit down right where it is, wave, and stay sitting until `endRemind()`. The view
+   * shows the reminder bubble once the wave starts. Returns false if the cat is busy.
+   */
+  remind() {
+    if (!this.canRemind) return false;
+    this.vx = 0;
+    this.goal = null;
+    this.attending = true;
+    const pre = this.asleep
+      ? [{ action: 'wake_up' }, { action: 'stretch' }, { action: 'sit_down' }]
+      : this._returnToSitSteps();
+    this._enqueue([...pre, { action: 'wave' }, { action: SIT, hold: Infinity }]);
+    return true;
+  }
+
+  /** The reminder is over: a few more seconds sitting, then back to normal life. */
+  endRemind() {
+    this.attending = false;
+    for (const step of this.queue) {
+      if (step.hold === Infinity) step.hold = this._rand(3, 6);
+    }
+    if (this.hold === Infinity) this.hold = this.elapsed + this._rand(3, 6);
   }
 
   command(name, data = {}) {

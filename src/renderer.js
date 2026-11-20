@@ -6,6 +6,15 @@ import { Audio_ } from './audio.js';
 import { Settings } from './settings.js';
 import { MeshRenderer, SIT_RIG, REST, isRest, undeformPoint, eyesOnto } from './mesh25d.js';
 import { Live25D, FAMILY } from './live25d.js';
+import { Reminders, CHOICES, DEFAULT_CONFIG } from './reminders.js';
+import { Bubble } from './bubble.js';
+
+// Break reminders. The bubble waits for the cat's wave, then for an answer this long
+// before assuming the user just went; a reply stays up this long.
+const REMIND_ANSWER_SECONDS = 15;
+const REMIND_REPLY_SECONDS = 3.5;
+// If the wave never comes (another command took over the queue), show it anyway.
+const REMIND_WAVE_TIMEOUT = 8;
 
 const SPRITE_BASE = '../assets/sprites/';
 const HEART_ICON = '../icons/icons8-heart-48.png';
@@ -111,6 +120,10 @@ const errorEl = document.getElementById('error');
 
 let sprites = null;
 let brain = null;
+let reminders = null;
+let bubble = null;
+// The reminder being delivered: { phase: 'approach' | 'asking' | 'reply', t, prompt }.
+let remind = null;
 let audio = null;
 let settings = null;
 // catSize is a placeholder until the manifest loads; applyStage derives the real one.
@@ -417,7 +430,8 @@ function updateHit() {
   // While the cat is being carried the window has to keep taking input even when the
   // cursor runs ahead of the sprite, otherwise the drag drops the moment you move
   // faster than the cat follows.
-  const over = brain.held || overSettings
+  const overBubble = !!bubble && !!lastMouse && bubble.contains(lastMouse.x, lastMouse.y);
+  const over = brain.held || overSettings || overBubble
     ? true
     : lastMouse
       ? overCatAt(lastMouse.x, lastMouse.y)
@@ -513,6 +527,76 @@ function placeTreat() {
   }
 }
 
+// ---- break reminders ------------------------------------------------------------------
+
+/**
+ * Drive a break reminder from due to done:
+ *   approach  the cat sits down where it is and waves (Brain.remind)
+ *   asking    the wave has started: meow, show the prompt and the three answers;
+ *             no answer in REMIND_ANSWER_SECONDS counts as having gone for the break
+ *   reply     the cat's answer to the choice, then it goes back to what cats do
+ */
+function updateReminder(dt) {
+  if (!remind) {
+    const due = reminders.update(dt, { paused: brain.paused, canShow: brain.canRemind });
+    if (!due) return;
+    if (!brain.remind()) {
+      reminders.abandon();
+      return;
+    }
+    remind = { phase: 'approach', t: 0, prompt: due };
+    return;
+  }
+
+  remind.t += dt;
+  switch (remind.phase) {
+    case 'approach':
+      // Picked up on the way: try again once the cat is back on the floor.
+      if (!brain.attending) {
+        reminders.abandon();
+        remind = null;
+        return;
+      }
+      if (brain.action === 'wave' || remind.t > REMIND_WAVE_TIMEOUT) {
+        remind.phase = 'asking';
+        remind.t = 0;
+        audio.play('meow');
+        bubble.ask(remind.prompt.text, CHOICES, answerReminder);
+      }
+      return;
+    case 'asking':
+      if (remind.t > REMIND_ANSWER_SECONDS) {
+        reminders.timeout();
+        finishReminder();
+      }
+      return;
+    case 'reply':
+      if (remind.t > REMIND_REPLY_SECONDS) finishReminder();
+      return;
+    default:
+      finishReminder();
+  }
+}
+
+function answerReminder(choice) {
+  if (!remind || remind.phase !== 'asking') return;
+  bubble.say(reminders.answer(choice));
+  remind.phase = 'reply';
+  remind.t = 0;
+}
+
+function finishReminder() {
+  bubble.hide();
+  brain.endRemind();
+  remind = null;
+}
+
+/** Keep the bubble over the cat's head, wherever the cat is (even while carried). */
+function placeBubble() {
+  if (!bubble.open) return;
+  bubble.place(brain.x + stage.catSize / 2, catTop() + groundInBox() - sitPx());
+}
+
 function spawnHeart() {
   const size = stage.catSize;
   const heart = document.createElement('img');
@@ -575,6 +659,7 @@ function wireEvents() {
     // receives a mousedown at all while it has the mouse, so this is a precision
     // check on top of the OS-level gate, not a replacement for it.
     if (event.button !== 0 || !overCatAt(event.clientX, event.clientY)) return;
+    if (bubble.contains(event.clientX, event.clientY)) return;
     // The panel sits above the cat; a press on it belongs to the panel.
     if (settings.open && settings.contains(event.clientX, event.clientY)) return;
     lastDragMove = performance.now();
@@ -722,7 +807,11 @@ async function main() {
 
   settings = new Settings({
     onVolume: (level) => audio.setVolume(level),
+    reminderDefaults: DEFAULT_CONFIG,
+    onReminder: (kind, value) => reminders.configure(kind, value),
   });
+  reminders = new Reminders({ config: settings.reminders });
+  bubble = new Bubble();
   // The cat-size slider resizes the live cat; the fish-size one is read when a fish
   // next appears, so it needs no callback.
   settings.onCatSize = () => relayoutForSize();
@@ -741,6 +830,8 @@ async function main() {
     catTop,
     treatEl,
     audio,
+    reminders,
+    bubble,
   };
 
   let last = performance.now();
@@ -764,7 +855,9 @@ async function main() {
     }
 
     brain.update(dt);
+    updateReminder(dt);
     draw(dt);
+    placeBubble();
     placeTreat();
     audio.update(brain.action);
     updateHit();

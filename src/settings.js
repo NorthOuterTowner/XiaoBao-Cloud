@@ -44,13 +44,43 @@ const SLIDERS = [
 /** Defaults, in the slider's own units (percent). */
 const DEFAULTS = { volume: 30, catScale: 100, fishScale: 45 };
 
+/** The break reminders: a switch and an interval slider each, in minutes. */
+const REMINDERS = [
+  { kind: 'eyes', label: '护眼提醒', min: 5, max: 60, step: 5 },
+  { kind: 'walk', label: '走动提醒', min: 15, max: 120, step: 5 },
+];
+// Reminder settings outlive a restart: someone who turned a reminder off should not
+// have it come back every time the cat starts.
+const REMINDER_STORE = 'desktop-cat.reminders';
+
+function loadReminders(defaults) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REMINDER_STORE) || '{}');
+    const out = {};
+    for (const [kind, d] of Object.entries(defaults)) {
+      const s = saved[kind] || {};
+      out[kind] = {
+        enabled: typeof s.enabled === 'boolean' ? s.enabled : d.enabled,
+        minutes: Number.isFinite(s.minutes) ? s.minutes : d.minutes,
+      };
+    }
+    return out;
+  } catch {
+    return structuredClone(defaults);
+  }
+}
+
 export class Settings {
   /**
    * @param {object} hooks
    * @param {(volume: number) => void} hooks.onVolume  0..1.
    */
-  constructor({ onVolume }) {
+  constructor({ onVolume, reminderDefaults, onReminder }) {
     this.onVolume = onVolume;
+    // Called with (kind, { enabled, minutes }) when a reminder setting changes.
+    this.onReminder = onReminder;
+    /** { eyes: { enabled, minutes }, walk: {...} }, saved across restarts. */
+    this.reminders = loadReminders(reminderDefaults);
     // True from a mousedown on the panel until the matching mouseup, so the renderer
     // keeps the window holding the mouse through a slider or title drag that slides
     // off the panel.
@@ -92,7 +122,8 @@ export class Settings {
     // cat is too close to the right edge of the screen. The panel sits above the cat
     // a bit, so it doesn't cover it.
     const PANEL_WIDTH = 300;
-    const PANEL_HEIGHT = 240;
+    // Measured now it is shown, so adding rows never needs this kept in step.
+    const PANEL_HEIGHT = this.root.offsetHeight || 240;
     const padding = 12;
     const under = window.innerWidth - (catX + catWidth + padding + PANEL_WIDTH);
     const flipLeft = under < 0;
@@ -208,6 +239,8 @@ export class Settings {
       this._readout(slider.key);
     }
 
+    this._buildReminders();
+
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'settings-close';
@@ -216,6 +249,75 @@ export class Settings {
     this.root.appendChild(close);
 
     document.body.appendChild(this.root);
+  }
+
+  _buildReminders() {
+    const heading = document.createElement('div');
+    heading.className = 'settings-section';
+    heading.textContent = '休息提醒';
+    this.root.appendChild(heading);
+
+    for (const { kind, label, min, max, step } of REMINDERS) {
+      const value = this.reminders[kind];
+
+      const toggleRow = document.createElement('label');
+      toggleRow.className = 'settings-row';
+      const name = document.createElement('span');
+      name.className = 'settings-label';
+      name.textContent = label;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = value.enabled;
+      const state = document.createElement('span');
+      state.className = 'settings-value';
+      toggleRow.append(name, box, state);
+
+      const intervalRow = document.createElement('label');
+      intervalRow.className = 'settings-row';
+      const intervalName = document.createElement('span');
+      intervalName.className = 'settings-label';
+      intervalName.textContent = '间隔';
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = String(min);
+      range.max = String(max);
+      range.step = String(step);
+      range.value = String(value.minutes);
+      range.setAttribute('aria-label', `${label}间隔（分钟）`);
+      const minutes = document.createElement('span');
+      minutes.className = 'settings-value';
+      intervalRow.append(intervalName, range, minutes);
+
+      const refresh = () => {
+        state.textContent = value.enabled ? '开' : '关';
+        minutes.textContent = `${value.minutes} 分钟`;
+        range.disabled = !value.enabled;
+      };
+      refresh();
+      box.addEventListener('change', () => {
+        value.enabled = box.checked;
+        refresh();
+        this._saveReminder(kind);
+      });
+      range.addEventListener('input', () => {
+        value.minutes = Number(range.value);
+        refresh();
+      });
+      // The countdown restarts on a change, so only commit when the slider is let go,
+      // not on every step of the drag.
+      range.addEventListener('change', () => this._saveReminder(kind));
+
+      this.root.append(toggleRow, intervalRow);
+    }
+  }
+
+  _saveReminder(kind) {
+    try {
+      localStorage.setItem(REMINDER_STORE, JSON.stringify(this.reminders));
+    } catch {
+      // Storage unavailable: the setting still applies for this run.
+    }
+    if (this.onReminder) this.onReminder(kind, { ...this.reminders[kind] });
   }
 
   _readout(key) {
