@@ -4,6 +4,8 @@ import { loadSprites, frameAt } from './sprites.js';
 import { Brain } from './behavior.js';
 import { Audio_ } from './audio.js';
 import { Settings } from './settings.js';
+import { MeshRenderer, SIT_RIG, REST, isRest, undeformPoint, eyesOnto } from './mesh25d.js';
+import { Live25D, FAMILY } from './live25d.js';
 
 const SPRITE_BASE = '../assets/sprites/';
 const HEART_ICON = '../icons/icons8-heart-48.png';
@@ -74,7 +76,35 @@ const SWING_STIFFNESS = 90;
 const SWING_DAMPING = 9;
 
 const catEl = document.getElementById('cat');
-const ctx = catEl.getContext('2d');
+
+// The cat is drawn through the 2.5D mesh (mesh25d.js) on WebGL: frames of the front
+// sit family get the live head turn, breathing and flicks, every other frame goes
+// through the same mesh at rest, which is the painting exactly as drawn. Without
+// WebGL the canvas falls back to plain 2D drawing of the baked frames. A canvas can
+// only ever have one kind of context, so WebGL is asked for first.
+let mesh = null;
+let ctx = null;
+try {
+  mesh = new MeshRenderer(catEl);
+} catch (error) {
+  console.warn('cat: no WebGL, drawing flat frames', error);
+  ctx = catEl.getContext('2d');
+}
+if (mesh) {
+  // A lost GPU context (driver reset, sleep/resume) would otherwise leave the cat
+  // invisible for good. Asking to keep it lets the browser restore it, and the
+  // restored context starts empty, so the mesh and its textures are rebuilt.
+  catEl.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    console.warn('cat: WebGL context lost');
+  });
+  catEl.addEventListener('webglcontextrestored', () => {
+    mesh = new MeshRenderer(catEl);
+  });
+}
+// Where the face sits on the sprite canvas: the cat looks from here at the cursor.
+const FACE = [SIT_RIG.head.cx, 150];
+const live = new Live25D();
 const heartsEl = document.getElementById('hearts');
 const treatEl = document.getElementById('treat');
 const errorEl = document.getElementById('error');
@@ -89,7 +119,12 @@ let footOffset = 0;
 
 let hitCtx = null;
 let shownImage = null;
+// The mesh parameters the frame on screen was drawn with (REST when undeformed), so
+// the hit test can follow the deformation and a cross-fade can hold the outgoing
+// frame exactly as it last looked.
+let shownParams = REST;
 let fadeFrom = null;
+let fadeFromParams = REST;
 let fadeT = 1;
 let lastSeq = -1;
 
@@ -188,9 +223,40 @@ function catTop() {
 
 let missingFrameReported = false;
 
+/** The cursor relative to the cat's face, in sitting heights, or null if unknown. */
+function cursorFromFace() {
+  if (!lastMouse || !sprites) return null;
+  const k = stage.catSize / sprites.canvas;
+  const sit = sitPx();
+  return {
+    dx: (lastMouse.x - (brain.x + FACE[0] * k)) / sit,
+    dy: (lastMouse.y - (catTop() + FACE[1] * k)) / sit,
+  };
+}
+
+/**
+ * The frame to show and the mesh parameters to show it with.
+ *
+ * The resting sit is drawn live: its first frame, the untouched painting, deformed by
+ * Live25D every tick. (The sit clip's other frames bake the same breathing and
+ * flicks in, for the flat fallback.) The rest of its family -- blink, head tilt,
+ * held -- plays its frames through the same rig, so a blink lands mid-turn without a
+ * jump and a head tilt starts from wherever the head was looking.
+ */
+function frameAndParams(dt) {
+  const clip = sprites.clips[brain.action];
+  const params = live.update(brain.paused ? 0 : dt, brain.action, cursorFromFace());
+  if (!clip) return { image: null, params: REST };
+  if (!mesh || !FAMILY.has(brain.action)) {
+    return { image: frameAt(clip, brain.elapsed), params: REST };
+  }
+  const image = brain.action === 'sit' ? clip.frames[0] : frameAt(clip, brain.elapsed);
+  return { image, params: { ...params } };
+}
+
 function draw(dt) {
   const clip = sprites.clips[brain.action];
-  const image = clip && frameAt(clip, brain.elapsed);
+  const { image, params } = frameAndParams(dt);
   if (!image) {
     // Never hand drawImage nothing: it throws, and a throw here used to end the frame
     // loop for good, leaving no cat and no error on screen. Report it once instead.
@@ -210,6 +276,7 @@ function draw(dt) {
 
   if (brain.seq !== lastSeq) {
     fadeFrom = shownImage;
+    fadeFromParams = shownParams;
     fadeT = 0;
     lastSeq = brain.seq;
   }
@@ -219,8 +286,14 @@ function draw(dt) {
   }
 
   const size = stage.catSize;
-  ctx.clearRect(0, 0, size, size);
-  if (fadeFrom) {
+  if (mesh) {
+    // Same blend as the flat path below, for the same reason: outgoing frame opaque,
+    // incoming one over it at fadeT, so the cat never goes see-through mid-fade.
+    mesh.clear();
+    if (fadeFrom) mesh.draw(fadeFrom, fadeFromParams, 1);
+    mesh.draw(image, params, fadeFrom ? fadeT : 1);
+  } else if (fadeFrom) {
+    ctx.clearRect(0, 0, size, size);
     // Hold the outgoing frame fully opaque and blend the incoming one over it.
     //
     // The obvious version -- outgoing at `1 - fadeT`, incoming at `fadeT` -- is only
@@ -235,9 +308,13 @@ function draw(dt) {
     ctx.drawImage(image, 0, 0, size, size);
     ctx.globalAlpha = 1;
   } else {
+    ctx.clearRect(0, 0, size, size);
     ctx.drawImage(image, 0, 0, size, size);
   }
 
+  shownParams = params;
+  // The hit mask is the undeformed frame; overCatAt maps the cursor back through
+  // the deformation before looking it up.
   if (image !== shownImage) {
     shownImage = image;
     hitCtx.clearRect(0, 0, size, size);
@@ -303,8 +380,17 @@ function updateSwing(dt) {
 
 /** Is this window-relative point on an opaque pixel of the cat as currently drawn? */
 function overCatAt(clientX, clientY) {
-  const x = Math.floor(clientX - Math.round(brain.x));
-  const y = Math.floor(clientY - catTop());
+  let bx = clientX - Math.round(brain.x);
+  let by = clientY - catTop();
+  if (!isRest(shownParams)) {
+    // Back through the mesh: which pixel of the painting is drawn under the cursor.
+    const k = sprites.canvas / stage.catSize;
+    const [sx, sy] = undeformPoint(bx * k, by * k, shownParams);
+    bx = sx / k;
+    by = sy / k;
+  }
+  const x = Math.floor(bx);
+  const y = Math.floor(by);
   if (x < 0 || y < 0 || x >= stage.catSize || y >= stage.catSize) return false;
   return hitCtx.getImageData(x, y, 1, 1).data[3] > HIT_ALPHA;
 }
@@ -602,6 +688,16 @@ async function main() {
   hitCtx = hit.getContext('2d', { willReadFrequently: true });
 
   sprites = await loadSprites(SPRITE_BASE);
+  // Blink only the eyes: keep the sit's fur and take just the lids from each blink
+  // frame (see eyesOnto). Repeated frames share one composite.
+  const { sit: sitClip, blink: blinkClip } = sprites.clips;
+  if (sitClip && blinkClip) {
+    const made = new Map();
+    blinkClip.frames = blinkClip.frames.map((frame) => {
+      if (!made.has(frame)) made.set(frame, eyesOnto(sitClip.frames[0], frame));
+      return made.get(frame);
+    });
+  }
   // Decode every stage of the treat up front. The swaps happen mid-chew, and a blank
   // frame while the next one loads would read as the fish vanishing a bite early.
   for (const src of TREAT_STAGES) {

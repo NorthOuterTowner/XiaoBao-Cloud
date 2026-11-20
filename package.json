@@ -1,7 +1,7 @@
 {
   "name": "desktop-cat",
   "productName": "Desktop Cat",
-  "version": "2.1.0",
+  "version": "3.1.0",
   "description": "A desktop cat that sits on your taskbar, wanders about and naps",
   "homepage": "https://github.com/NorthOuterTowner/desktop-pet",
   "repository": {
@@ -22,6 +22,8 @@
     "assets:probe": "python tools/build_assets.py --probe",
     "icons": "python tools/build_icons.py && tauri icon build/icon.png --output src-tauri/icons",
     "treat": "python tools/build_treat.py",
+    "model": "npm --prefix tools/cat3d run export && node -e \"require('fs').mkdirSync('assets/model',{recursive:true});require('fs').copyFileSync('tools/cat3d/out/desktop-cat.glb','assets/model/desktop-cat.glb')\"",
+    "model:shoot": "npm --prefix tools/cat3d run shoot",
     "check:behavior": "node tools/_simulate.mjs",
     "dist": "node scripts/build-installers.mjs",
     "dist:win": "node scripts/build-installers.mjs --win",

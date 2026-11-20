@@ -26,6 +26,7 @@ const PARTS = [
   ['src', null],
   ['assets/sprites', 'npm run assets'],
   ['assets/audio', null],
+  ['assets/model', 'npm run model'],
   ['icons', 'npm run treat'],
 ];
 
