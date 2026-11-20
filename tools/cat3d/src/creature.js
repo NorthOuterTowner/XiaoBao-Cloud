@@ -1,4 +1,4 @@
-// Desktop Cat: a chibi long-haired grey-taupe tabby kitten, built from rounded primitives.
+// 小豹桌宠 (Xiaobao): a chibi long-haired grey-taupe tabby kitten, built from rounded primitives.
 // Plush-toy look: soft sheen fur material, tabby stripes painted into vertex colours in rig (world)
 // space so the pattern flows continuously across separate parts.
 // Units are meters (the kitten is ~0.33 m tall), +Y up, facing +Z. See the skill's authoring.md.

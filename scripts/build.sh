@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds the desktop-cat installers on macOS.
+# Builds the xiaobao-cloud installers on macOS.
 #
 # A thin wrapper so the build can be run straight from a shell without going through
 # npm. Every argument is passed through untouched. (Linux is not a packaging target

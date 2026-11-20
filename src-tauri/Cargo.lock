@@ -726,19 +726,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "desktop-cat"
-version = "3.1.0"
-dependencies = [
- "rfd",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-single-instance",
- "windows",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4629,6 +4616,19 @@ dependencies = [
  "libc",
  "once_cell",
  "pkg-config",
+]
+
+[[package]]
+name = "xiaobao-cloud"
+version = "4.1.0"
+dependencies = [
+ "rfd",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-single-instance",
+ "windows",
 ]
 
 [[package]]

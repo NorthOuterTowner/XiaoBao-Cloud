@@ -1,6 +1,6 @@
-# desktop-cat
+# xiaobao-cloud
 
-A desktop pet. A cat sits along the bottom of your screen on top of the taskbar,
+小豹桌宠 (Xiaobao), a desktop pet. A cat sits along the bottom of your screen on top of the taskbar,
 blinks, gets up for a walk, grooms itself and curls up for a nap when you leave it
 alone. Click it and it tilts its head at you with a little heart. Pick it up and drop
 it and it lands with its fur up.
@@ -65,7 +65,7 @@ Bin, no undo. So the file path is deliberately the slow one:
   a pile of junk. It is five minutes, it is per-run, and it is never written to disk:
   every launch starts by asking again.
 - Some things are refused outright, before any dialog: folders, drive roots, your home
-  folder, anything inside a system folder, and anything belonging to Desktop Cat
+  folder, anything inside a system folder, and anything belonging to Xiaobao
   itself. The cat eats one file at a time, not your projects.
 
 The page never even sees the paths. It is told where a drag is, so the cat can open
@@ -247,8 +247,8 @@ folder of files to copy about.
 
 | Platform | Artifact | Size | What installing it does |
 | --- | --- | --- | --- |
-| Windows | `desktop-cat-<v>-win-x64-setup.exe` | ~6 MB | NSIS wizard for the current user: choose the location, get a Start menu shortcut and an entry in Apps & features that uninstalls cleanly |
-| macOS | `desktop-cat-<v>-mac-arm64.dmg` | -- | Disk image you drag to Applications. Runs as a menu-bar accessory with no Dock tile |
+| Windows | `xiaobao-cloud-<v>-win-x64-setup.exe` | ~6 MB | NSIS wizard for the current user: choose the location, get a Start menu shortcut and an entry in Apps & features that uninstalls cleanly |
+| macOS | `xiaobao-cloud-<v>-mac-arm64.dmg` | -- | Disk image you drag to Applications. Runs as a menu-bar accessory with no Dock tile |
 
 Both are built for x64 and arm64, so there is an Apple-silicon and an Intel `.dmg`.
 Everything lands in `dist/` next to a `SHA256SUMS-<platform>.txt`. Installed, the
@@ -323,7 +323,7 @@ set up.
 
 The builds are not code signed, so SmartScreen warns on a first Windows run and macOS
 wants **right-click > Open** the first time (or
-`xattr -dr com.apple.quarantine "/Applications/Desktop Cat.app"`). The macOS app is
+`xattr -dr com.apple.quarantine "/Applications/小豹桌宠.app"`). The macOS app is
 ad-hoc signed (`signingIdentity: "-"`), which is the minimum Apple silicon needs to
 run it at all.
 

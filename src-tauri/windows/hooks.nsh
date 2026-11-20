@@ -1,10 +1,11 @@
 ; Hooks into Tauri's NSIS installer (bundle > windows > nsis > installerHooks).
 ;
-; Desktop Cat up to 1.1 was an Electron app, installed by electron-builder under its
-; own uninstall key. This installer knows nothing about that key, so without this hook
-; an upgrade would leave the two side by side: two cats on the taskbar, two Start menu
-; entries, two rows in Apps & features. The old one is removed before anything new is
-; copied.
+; This app was called Desktop Cat before it became 小豹桌宠, and up to 1.1 it was an
+; Electron app, installed by electron-builder under its own uninstall key. This
+; installer knows nothing about that key, so without this hook an upgrade would leave
+; the two side by side: two cats on the taskbar, two Start menu entries, two rows in
+; Apps & features. The old one is removed before anything new is copied. Every name
+; below is the old one on purpose -- it is what the old installer wrote to disk.
 ;
 ; The key is electron-builder's GUID for the old appId, dev.desktopcat.app -- a UUID v5
 ; of the appId in electron-builder's namespace, so it never changes. Both hives are

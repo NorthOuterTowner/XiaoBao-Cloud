@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the desktop-cat installers on Windows.
+    Builds the xiaobao-cloud installers on Windows.
 
 .DESCRIPTION
     A thin wrapper so the build can be run straight from a PowerShell prompt without

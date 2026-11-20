@@ -1,17 +1,17 @@
 {
-  "name": "desktop-cat",
-  "productName": "Desktop Cat",
-  "version": "4.0.0",
-  "description": "A desktop cat that sits on your taskbar, wanders about and naps",
-  "homepage": "https://github.com/NorthOuterTowner/desktop-pet",
+  "name": "xiaobao-cloud",
+  "productName": "小豹桌宠",
+  "version": "4.1.0",
+  "description": "小豹桌宠 (Xiaobao): a desktop cat that sits on your taskbar, wanders about and naps",
+  "homepage": "https://github.com/NorthOuterTowner/xiaobao-cloud",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NorthOuterTowner/desktop-pet.git"
+    "url": "git+https://github.com/NorthOuterTowner/xiaobao-cloud.git"
   },
   "private": true,
   "license": "MIT",
   "author": {
-    "name": "desktop-cat",
+    "name": "xiaobao-cloud",
     "email": "NorthOuterTowner@users.noreply.github.com"
   },
   "scripts": {

@@ -1,11 +1,11 @@
 [package]
-name = "desktop-cat"
+name = "xiaobao-cloud"
 # Not where the release version comes from: tauri.conf.json reads it out of
 # package.json, so a version bump stays a one-line edit there. Kept in step anyway so
 # cargo's own output is not misleading.
-version = "3.1.0"
-description = "A desktop cat that sits on your taskbar, wanders about and naps"
-authors = ["desktop-cat"]
+version = "4.1.0"
+description = "小豹桌宠 (Xiaobao): a desktop cat that sits on your taskbar, wanders about and naps"
+authors = ["xiaobao-cloud"]
 license = "MIT"
 edition = "2024"
 # tauri-plugin-single-instance needs 1.90.

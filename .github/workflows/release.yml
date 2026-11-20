@@ -193,7 +193,7 @@ jobs:
             echo
             echo "These builds are not code signed. Windows SmartScreen will warn on"
             echo "first run, and macOS needs **right-click > Open** the first time, or"
-            echo "\`xattr -dr com.apple.quarantine \"/Applications/Desktop Cat.app\"\`."
+            echo "\`xattr -dr com.apple.quarantine \"/Applications/小豹桌宠.app\"\`."
           } > ../notes.md
 
       - name: Create or update the GitHub release
@@ -212,7 +212,7 @@ jobs:
           else
             gh release create "$TAG" installers/* \
               --target "$GITHUB_SHA" \
-              --title "Desktop Cat ${TAG#v}" \
+              --title "小豹桌宠 ${TAG#v}" \
               --notes-file notes.md
           fi
 

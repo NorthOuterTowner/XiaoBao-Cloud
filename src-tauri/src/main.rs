@@ -1,4 +1,4 @@
-//! Desktop Cat, the native half.
+//! 小豹桌宠 (Xiaobao), the native half.
 //!
 //! Everything the page cannot do for itself: one transparent window spanning the work
 //! area, mouse click-through except over the cat's own pixels, the tray icon and its
@@ -355,7 +355,7 @@ fn build_tray(app: &AppHandle) -> Result<(), Box<dyn Error>> {
     let handle = app.clone();
     TrayIconBuilder::with_id("cat")
         .icon(icon)
-        .tooltip("Desktop Cat")
+        .tooltip("小豹桌宠")
         .menu(&menu.menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(move |_tray, event| {
@@ -386,7 +386,7 @@ fn create_window(app: &AppHandle) -> Result<WebviewWindow, Box<dyn Error>> {
     let (width, height) = layout.logical_size();
 
     let window = WebviewWindowBuilder::new(app, PET, WebviewUrl::App("src/index.html".into()))
-        .title("Desktop Cat")
+        .title("小豹桌宠")
         .transparent(true)
         .decorations(false)
         .shadow(false)
@@ -590,5 +590,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Desktop Cat");
+        .expect("error while running 小豹桌宠");
 }

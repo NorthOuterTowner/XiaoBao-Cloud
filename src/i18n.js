@@ -16,7 +16,7 @@
 
 export const LANGUAGES = ['zh', 'en'];
 
-const STORE = 'desktop-cat.lang';
+const STORE = 'xiaobao.lang';
 
 /**
  * The chrome's strings. A value is either the text or a function of its arguments,

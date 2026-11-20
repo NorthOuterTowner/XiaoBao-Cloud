@@ -145,7 +145,7 @@ async fn alert(
     let dialog = dialog.set_title(message).set_description(detail);
     #[cfg(not(target_os = "macos"))]
     let dialog = dialog
-        .set_title("Desktop Cat")
+        .set_title("小豹桌宠")
         .set_description(format!("{message}\n\n{detail}"));
 
     dialog.show().await
@@ -176,7 +176,7 @@ fn refuse_to_eat(app: &AppHandle, target: &Path) -> Option<&'static str> {
         .iter()
         .any(|dir| same(target, dir) || inside(target, dir))
     {
-        return Some("part of Desktop Cat itself");
+        return Some("part of Xiaobao itself");
     }
 
     // `inside(home, target)` rather than the other way round: this is the check that
@@ -203,7 +203,7 @@ fn refuse_to_eat(app: &AppHandle, target: &Path) -> Option<&'static str> {
     }
 }
 
-/// Where Desktop Cat itself lives.
+/// Where Xiaobao itself lives.
 fn own_places(app: &AppHandle) -> Vec<PathBuf> {
     let mut places = Vec::new();
     if let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {

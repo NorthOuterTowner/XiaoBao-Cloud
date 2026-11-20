@@ -28,9 +28,9 @@ class CatWindow(QWidget):
             | Qt.WindowType.Tool,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setWindowTitle("Desktop Cat")
+        self.setWindowTitle("小豹桌宠")
 
-        self.settings = QSettings("desktop-cat", "catpet")
+        self.settings = QSettings("xiaobao-cloud", "catpet")
         self.sprites = SpriteLibrary(assets)
 
         self.brain = Brain(
@@ -182,7 +182,7 @@ class CatWindow(QWidget):
         if icon.isNull():
             icon = QIcon(QPixmap(32, 32))
         tray = QSystemTrayIcon(icon, self)
-        tray.setToolTip("Desktop Cat")
+        tray.setToolTip("小豹桌宠")
         tray.setContextMenu(self._menu())
         tray.activated.connect(self._on_tray_activated)
         return tray

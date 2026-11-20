@@ -57,7 +57,7 @@ const SLIDERS = [
 /** Defaults, in the slider's own units (percent). */
 const DEFAULTS = { volume: 30, catScale: 100, fishScale: 45 };
 // Saved values outlive a restart, so Save means what it says.
-const VALUE_STORE = 'desktop-cat.settings';
+const VALUE_STORE = 'xiaobao.settings';
 
 function loadValues() {
   const out = { ...DEFAULTS };
@@ -87,7 +87,7 @@ const REMINDERS = [
 ];
 // Reminder settings outlive a restart: someone who turned a reminder off should not
 // have it come back every time the cat starts.
-const REMINDER_STORE = 'desktop-cat.reminders';
+const REMINDER_STORE = 'xiaobao.reminders';
 
 /** Nearest notch on a reminder's slider, never zero -- zero means off. */
 function snap(minutes, { max, step }) {

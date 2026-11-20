@@ -41,12 +41,12 @@ const BUNDLES = {
   win: {
     kind: 'nsis',
     ext: '.exe',
-    name: (version, arch) => `desktop-cat-${version}-win-${arch}-setup.exe`,
+    name: (version, arch) => `xiaobao-cloud-${version}-win-${arch}-setup.exe`,
   },
   mac: {
     kind: 'dmg',
     ext: '.dmg',
-    name: (version, arch) => `desktop-cat-${version}-mac-${arch}.dmg`,
+    name: (version, arch) => `xiaobao-cloud-${version}-mac-${arch}.dmg`,
   },
 };
 
@@ -136,7 +136,7 @@ function parseArgs(argv) {
     if (!HOST) {
       fail(
         `nothing to build on ${process.platform}`,
-        'Desktop Cat ships for Windows and macOS. Run it from source with `npm start`.',
+        'Xiaobao ships for Windows and macOS. Run it from source with `npm start`.',
       );
     }
     options.platforms.add(HOST);
@@ -264,7 +264,7 @@ async function cleanDist(platform, suffix) {
   await fs.mkdir(DIST, { recursive: true });
   const bundle = BUNDLES[platform];
   const ours = (name) =>
-    (name.startsWith('desktop-cat-') && name.endsWith(bundle.ext)) ||
+    (name.startsWith('xiaobao-cloud-') && name.endsWith(bundle.ext)) ||
     name === `SHA256SUMS-${suffix}.txt` ||
     name === `installers-${suffix}.json`;
   for (const name of await fs.readdir(DIST)) {
@@ -281,7 +281,7 @@ async function writeManifest(version, suffix, files) {
   const manifest = path.join(DIST, `installers-${suffix}.json`);
   await fs.writeFile(
     manifest,
-    `${JSON.stringify({ product: 'desktop-cat', version, builtOn: suffix, files }, null, 2)}\n`,
+    `${JSON.stringify({ product: 'xiaobao-cloud', version, builtOn: suffix, files }, null, 2)}\n`,
   );
 
   const sums = path.join(DIST, `SHA256SUMS-${suffix}.txt`);
@@ -312,7 +312,7 @@ async function main() {
   const cli = tauriCli();
 
   console.log(
-    `\nbuilding desktop-cat ${version}: ` +
+    `\nbuilding xiaobao-cloud ${version}: ` +
       jobs.map((job) => `${job.platform}-${job.arch}`).join(', ') +
       (options.dirOnly ? ' (app only, no installer)' : ''),
   );

@@ -14,7 +14,7 @@ ASSETS = Path(__file__).resolve().parent / "assets" / "sprites"
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("Desktop Cat")
+    app.setApplicationName("小豹桌宠")
     # The cat is the only window; closing it should not be the thing that quits,
     # the tray menu is.
     app.setQuitOnLastWindowClosed(False)
@@ -22,7 +22,7 @@ def main() -> int:
     try:
         cat = CatWindow(ASSETS)
     except FileNotFoundError as exc:
-        QMessageBox.critical(None, "Desktop Cat", str(exc))
+        QMessageBox.critical(None, "小豹桌宠", str(exc))
         return 1
 
     cat.show()
