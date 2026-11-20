@@ -44,6 +44,12 @@ window.pet = {
   openMenu: () => send('open_menu'),
 
   /**
+   * The language the page is in, 'zh' or 'en'. The menu is drawn by the platform, so
+   * the native side has to be told which labels to put on it.
+   */
+  setLanguage: (lang) => send('set_language', { lang }),
+
+  /**
    * Menu and tray commands, as `{ name, ...data }`. Names: 'come' (carries `x`),
    * 'walk', 'feed', 'tilt', 'wave', 'groom', 'sleep', 'wake', 'pause', 'resume', and
    * the answers to a dropped file, 'eat' and 'cancelFeed'.

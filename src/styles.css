@@ -160,13 +160,66 @@ body.carrying.over-cat {
 }
 
 .settings-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 15px;
   font-weight: 600;
   margin: -18px -20px 14px;
   padding: 12px 20px 8px;
-  /* The title bar is the drag handle. */
+  /* The title bar is the drag handle (the language switch takes its own clicks). */
   cursor: move;
   user-select: none;
+}
+
+/* The 中 / EN switch: a pill with a knob that slides under whichever side is on. */
+.lang-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 66px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(140, 170, 220, 0.25);
+  cursor: pointer;
+}
+
+.lang-knob {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  border-radius: 999px;
+  background: #4f78c8;
+  transition: transform 160ms ease;
+}
+
+.lang-switch[data-lang='en'] .lang-knob {
+  transform: translateX(100%);
+}
+
+.lang-option {
+  position: relative;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #aeb8c8;
+  font: 600 11px/1.4 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.lang-option[aria-pressed='true'] {
+  color: #fff;
+}
+
+.lang-option:focus-visible {
+  outline: 1px solid #9ec2ff;
+  outline-offset: 1px;
 }
 
 .settings-row {
@@ -175,6 +228,11 @@ body.carrying.over-cat {
   align-items: center;
   gap: 10px;
   margin: 12px 0;
+}
+
+/* English labels need a little more room than the Chinese ones. */
+#settings[data-lang='en'] .settings-row {
+  grid-template-columns: 84px 1fr auto;
 }
 
 .settings-label {
@@ -194,19 +252,54 @@ body.carrying.over-cat {
   cursor: pointer;
 }
 
-.settings-close {
-  display: block;
-  margin: 16px 0 0 auto;
-  padding: 6px 18px;
-  border: 0;
+/* Restore defaults sits off on its own; Cancel and Save pair up on the right. */
+.settings-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.settings-button {
+  padding: 6px 14px;
+  border: 1px solid rgba(140, 170, 220, 0.28);
   border-radius: 7px;
-  background: #4f78c8;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  color: #dce4f2;
   font: inherit;
   cursor: pointer;
 }
 
-.settings-close:hover {
+.settings-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.settings-button:focus-visible {
+  outline: 1px solid #9ec2ff;
+  outline-offset: 1px;
+}
+
+.settings-restore {
+  margin-right: auto;
+  padding: 6px 10px;
+  border-color: transparent;
+  background: none;
+  color: #9aa6b8;
+  font-size: 12px;
+}
+
+.settings-restore:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #dce4f2;
+}
+
+.settings-save {
+  border-color: transparent;
+  background: #4f78c8;
+  color: #fff;
+}
+
+.settings-save:hover {
   background: #5d87d8;
 }
 
@@ -301,7 +394,7 @@ body.carrying.over-cat {
   transform: rotate(45deg);
 }
 
-/* Reminder settings: a checkbox and an interval slider per reminder. */
+/* Reminder settings: one interval slider per reminder, its lowest notch "off". */
 .settings-section {
   margin: 16px 0 4px;
   padding-top: 10px;
@@ -310,8 +403,15 @@ body.carrying.over-cat {
   font-weight: 600;
 }
 
-.settings-row input[type='checkbox'] {
-  justify-self: start;
-  accent-color: #7fb0ff;
-  cursor: pointer;
+/* "Off" reads as a state rather than a value, so it is dimmed. */
+.settings-value-off {
+  color: #7c8699;
+}
+
+/* ---- "Come here": choosing a spot ---------------------------------------------------
+
+   The crosshair is the only cue: with it up, the next click is where the cat goes. */
+body.picking,
+body.picking.over-cat {
+  cursor: crosshair;
 }

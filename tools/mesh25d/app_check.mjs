@@ -98,6 +98,28 @@ try {
   // Unanswered: gone by itself after 15 s.
   await page.waitForFunction(() => !window.__catDebug.bubble.open, null, { timeout: 20000 });
   report.timedOut = await page.evaluate(() => ({ busy: window.__catDebug.reminders.kinds.eyes.busy, left: Math.round(window.__catDebug.reminders.kinds.eyes.left) }));
+  // "Come here": the menu item starts picking; a left click anywhere is the spot,
+  // and the cat ends up centred on it. A right click cancels.
+  await page.evaluate(() => { const b = window.__catDebug.brain; b.queue = []; b.x = 100; b._begin({ action: 'sit', hold: 60 }); });
+  await page.evaluate(() => window.__emit('pet:command', { name: 'come' }));
+  await page.mouse.move(600, 200);
+  await page.waitForTimeout(200);
+  report.picking = await page.evaluate(() => ({
+    crosshair: document.body.classList.contains('picking'),
+  }));
+  await page.screenshot({ path: path.join(out, 'app-pick.png') });
+  await page.mouse.click(600, 200);
+  await page.waitForFunction(() => {
+    const b = window.__catDebug.brain;
+    return b.action === 'head_tilt' || (b.action === 'sit' && b.x > 300);
+  }, null, { timeout: 30000 });
+  report.cameTo = await page.evaluate(() => {
+    const b = window.__catDebug.brain;
+    return { centre: Math.round(b.x + document.getElementById('cat').width / 2), crosshairGone: !document.body.classList.contains('picking') };
+  });
+  await page.evaluate(() => window.__emit('pet:command', { name: 'come' }));
+  await page.mouse.click(300, 200, { button: 'right' });
+  report.cancelled = await page.evaluate(() => !document.body.classList.contains('picking') && window.__catDebug.brain.goal == null);
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

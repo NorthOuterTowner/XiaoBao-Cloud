@@ -6,8 +6,9 @@ import { Audio_ } from './audio.js';
 import { Settings } from './settings.js';
 import { MeshRenderer, SIT_RIG, REST, isRest, undeformPoint, eyesOnto } from './mesh25d.js';
 import { Live25D, FAMILY } from './live25d.js';
-import { Reminders, CHOICES, DEFAULT_CONFIG } from './reminders.js';
+import { Reminders, choices, DEFAULT_CONFIG } from './reminders.js';
 import { Bubble } from './bubble.js';
+import { language, onLanguage } from './i18n.js';
 
 // Break reminders. The bubble waits for the cat's wave, then for an answer this long
 // before assuming the user just went; a reply stays up this long.
@@ -15,6 +16,10 @@ const REMIND_ANSWER_SECONDS = 15;
 const REMIND_REPLY_SECONDS = 3.5;
 // If the wave never comes (another command took over the queue), show it anyway.
 const REMIND_WAVE_TIMEOUT = 8;
+// "Come here": after the menu item, the next left click anywhere on screen is where
+// the cat walks to. While choosing, the whole window takes the mouse, so give up on
+// its own after this long rather than leave the desktop unclickable.
+const PICK_SECONDS = 10;
 
 const SPRITE_BASE = '../assets/sprites/';
 const HEART_ICON = '../icons/icons8-heart-48.png';
@@ -124,6 +129,8 @@ let reminders = null;
 let bubble = null;
 // The reminder being delivered: { phase: 'approach' | 'asking' | 'reply', t, prompt }.
 let remind = null;
+// Choosing where "come here" goes: { t } seconds into it, or null.
+let picking = null;
 let audio = null;
 let settings = null;
 // catSize is a placeholder until the manifest loads; applyStage derives the real one.
@@ -431,7 +438,7 @@ function updateHit() {
   // cursor runs ahead of the sprite, otherwise the drag drops the moment you move
   // faster than the cat follows.
   const overBubble = !!bubble && !!lastMouse && bubble.contains(lastMouse.x, lastMouse.y);
-  const over = brain.held || overSettings || overBubble
+  const over = brain.held || overSettings || overBubble || !!picking
     ? true
     : lastMouse
       ? overCatAt(lastMouse.x, lastMouse.y)
@@ -527,6 +534,31 @@ function placeTreat() {
   }
 }
 
+// ---- "come here": pick a spot -----------------------------------------------------------
+
+let pickCancelledAt = 0;
+
+function startPicking() {
+  if (brain.airborne) return;
+  picking = { t: 0 };
+  // The crosshair is the whole hint: it says "click somewhere" by itself.
+  document.body.classList.add('picking');
+}
+
+function endPicking() {
+  if (!picking) return;
+  picking = null;
+  pickCancelledAt = performance.now();
+  document.body.classList.remove('picking');
+}
+
+function updatePicking(dt) {
+  if (!picking) return;
+  picking.t += dt;
+  // Picked up or dropped meanwhile, or nobody clicked: forget it.
+  if (picking.t > PICK_SECONDS || brain.airborne) endPicking();
+}
+
 // ---- break reminders ------------------------------------------------------------------
 
 /**
@@ -538,7 +570,8 @@ function placeTreat() {
  */
 function updateReminder(dt) {
   if (!remind) {
-    const due = reminders.update(dt, { paused: brain.paused, canShow: brain.canRemind });
+    // Not while the user is choosing a spot: the reminder would fight the click.
+    const due = reminders.update(dt, { paused: brain.paused, canShow: brain.canRemind && !picking });
     if (!due) return;
     if (!brain.remind()) {
       reminders.abandon();
@@ -561,7 +594,7 @@ function updateReminder(dt) {
         remind.phase = 'asking';
         remind.t = 0;
         audio.play('meow');
-        bubble.ask(remind.prompt.text, CHOICES, answerReminder);
+        bubble.ask(remind.prompt.text, choices(), answerReminder);
       }
       return;
     case 'asking':
@@ -653,6 +686,17 @@ function wireEvents() {
   });
 
   document.addEventListener('mousedown', (event) => {
+    // Choosing a spot for "come here": a left click is the spot, a right click backs
+    // out. Nothing else (drag, poke) happens on this click.
+    if (picking) {
+      event.preventDefault();
+      if (event.button === 0) {
+        // Centre the cat on the click: brain.x is the left edge of its box.
+        brain.command('come', { x: event.clientX - stage.catSize / 2 });
+      }
+      endPicking();
+      return;
+    }
     // Hit-tested against where the click actually landed rather than against the
     // hovering state, which is a frame old by now and may have been computed for a
     // different cursor position or a different animation frame. The window only
@@ -701,6 +745,8 @@ function wireEvents() {
 
   document.addEventListener('contextmenu', (event) => {
     event.preventDefault();
+    // The right click that cancelled picking: no menu on top of that.
+    if (pickCancelledAt && performance.now() - pickCancelledAt < 500) return;
     if (overCatAt(event.clientX, event.clientY)) window.pet.openMenu();
   });
 
@@ -741,6 +787,12 @@ function wireEvents() {
         // window top. The panel will position itself beside the cat.
         settings.show(brain.x, stage.catSize, floorTop());
       }
+      return;
+    }
+    // Where the cursor was when the menu item was clicked is on the menu itself --
+    // next to the cat, or over by the tray -- so ask for the spot instead.
+    if (name === 'come') {
+      startPicking();
       return;
     }
     if (name === 'eat' || name === 'cancelFeed') awaitingFeedAnswer = false;
@@ -815,6 +867,13 @@ async function main() {
   // The cat-size slider resizes the live cat; the fish-size one is read when a fish
   // next appears, so it needs no callback.
   settings.onCatSize = () => relayoutForSize();
+  // The stage above was laid out before Settings existed, at scale 1. A size saved in
+  // an earlier run has to take effect now rather than at the first slider drag.
+  if (settings.catScale !== 1) relayoutForSize();
+  // The right-click and tray menus are native, so the language has to be pushed over:
+  // once now, for what was saved, and again whenever the switch is flicked.
+  window.pet.setLanguage(language());
+  onLanguage((lang) => window.pet.setLanguage(lang));
 
   wireEvents();
 
@@ -832,6 +891,7 @@ async function main() {
     audio,
     reminders,
     bubble,
+    settings,
   };
 
   let last = performance.now();
@@ -855,6 +915,7 @@ async function main() {
     }
 
     brain.update(dt);
+    updatePicking(dt);
     updateReminder(dt);
     draw(dt);
     placeBubble();

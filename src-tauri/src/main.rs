@@ -30,7 +30,9 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use tauri::image::Image;
-use tauri::menu::{CheckMenuItem, ContextMenu, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::menu::{
+    CheckMenuItem, ContextMenu, IsMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem,
+};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{
@@ -81,11 +83,17 @@ impl Layout {
 struct CatMenu {
     menu: Menu<Wry>,
     pause: CheckMenuItem<Wry>,
+    /// Every plain item, by id, so `set_language` can swap the labels on the menu
+    /// already handed to the tray rather than build a second one.
+    items: Vec<(&'static str, MenuItem<Wry>)>,
 }
 
 /// Process-wide state, managed by Tauri.
 struct Pet {
     paused: AtomicBool,
+    /// Which language the menu is in. The page owns the choice (it is made in the
+    /// Settings panel) and pushes it here; until it does, the labels are English.
+    chinese: AtomicBool,
     /// Whether the window is currently taking mouse input. Mirrors the window so the
     /// watchdog knows whether a silent page is dangerous or harmless.
     grabbing: AtomicBool,
@@ -101,6 +109,7 @@ impl Pet {
     fn new() -> Self {
         Self {
             paused: AtomicBool::new(false),
+            chinese: AtomicBool::new(false),
             grabbing: AtomicBool::new(false),
             last_beat: Mutex::new(Instant::now()),
             layout: Mutex::new(None),
@@ -192,6 +201,23 @@ fn heartbeat(pet: State<'_, Pet>) {
     beat(&pet);
 }
 
+/// The page's language, pushed on startup and whenever the 中/EN switch is flicked.
+///
+/// The menu is drawn by the platform, so it cannot read the page's strings for
+/// itself. The labels are swapped on the items in place, which keeps the one menu the
+/// tray was built with -- the tick on Pause and the tray's own handle stay valid.
+#[tauri::command]
+fn set_language(pet: State<'_, Pet>, lang: String) {
+    let chinese = lang.starts_with("zh");
+    pet.chinese.store(chinese, Ordering::SeqCst);
+    if let Some(menu) = pet.menu.lock().unwrap().as_ref() {
+        for (id, item) in &menu.items {
+            let _ = item.set_text(label(id, chinese));
+        }
+        let _ = menu.pause.set_text(label("pause", chinese));
+    }
+}
+
 /// Right-clicked the cat: the same native menu the tray uses.
 ///
 /// The window is not focusable, so the pet can never steal keystrokes from whatever
@@ -226,33 +252,66 @@ fn open_menu(window: WebviewWindow, pet: State<'_, Pet>) -> Result<(), String> {
 
 // ---- menu and tray ------------------------------------------------------------------
 
-/// One definition, shared by the tray icon and right-clicking the cat itself.
-fn build_menu(app: &AppHandle, paused: bool) -> tauri::Result<CatMenu> {
-    let item = |id: &str, label: &str| MenuItem::with_id(app, id, label, true, None::<&str>);
-    let separator = || PredefinedMenuItem::separator(app);
-    let pause = CheckMenuItem::with_id(app, "pause", "Pause", true, paused, None::<&str>)?;
+/// The menu, top to bottom; "-" is a separator. One order for both languages.
+const MENU_ORDER: &[&str] = &[
+    "come", "walk", "feed", "-", "tilt", "wave", "groom", "-", "sleep", "wake", "-", "pause",
+    "settings", "-", "quit",
+];
 
-    let menu = Menu::<Wry>::with_items(
+/// Each item as (id, English, Chinese). The page's own strings live in src/i18n.js;
+/// these are the ones only the platform can draw.
+const MENU_LABELS: &[(&str, &str, &str)] = &[
+    ("come", "Come here", "过来这边"),
+    ("walk", "Go for a walk", "去散散步"),
+    ("feed", "Give a fish", "喂条小鱼"),
+    ("tilt", "Head tilt", "歪歪头"),
+    ("wave", "Wave", "挥挥手"),
+    ("groom", "Groom", "舔毛"),
+    ("sleep", "Nap", "去睡觉"),
+    ("wake", "Wake up", "醒一醒"),
+    ("pause", "Pause", "暂停"),
+    ("settings", "Settings…", "设置…"),
+    ("quit", "Quit", "退出"),
+];
+
+fn label(id: &str, chinese: bool) -> &'static str {
+    MENU_LABELS
+        .iter()
+        .find(|(key, ..)| *key == id)
+        .map_or("", |(_, english, mandarin)| {
+            if chinese { mandarin } else { english }
+        })
+}
+
+/// One definition, shared by the tray icon and right-clicking the cat itself.
+fn build_menu(app: &AppHandle, paused: bool, chinese: bool) -> tauri::Result<CatMenu> {
+    let pause = CheckMenuItem::with_id(
         app,
-        &[
-            &item("come", "Come here")?,
-            &item("walk", "Go for a walk")?,
-            &item("feed", "Give a fish")?,
-            &separator()?,
-            &item("tilt", "Head tilt")?,
-            &item("wave", "Wave")?,
-            &item("groom", "Groom")?,
-            &separator()?,
-            &item("sleep", "Nap")?,
-            &item("wake", "Wake up")?,
-            &separator()?,
-            &pause,
-            &item("settings", "Settings…")?,
-            &separator()?,
-            &item("quit", "Quit")?,
-        ],
+        "pause",
+        label("pause", chinese),
+        true,
+        paused,
+        None::<&str>,
     )?;
-    Ok(CatMenu { menu, pause })
+
+    let mut items: Vec<(&'static str, MenuItem<Wry>)> = Vec::new();
+    // Held as owned values first: the menu takes references, which have to outlive it.
+    let mut entries: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
+    for id in MENU_ORDER {
+        match *id {
+            "-" => entries.push(Box::new(PredefinedMenuItem::separator(app)?)),
+            "pause" => entries.push(Box::new(pause.clone())),
+            _ => {
+                let item = MenuItem::with_id(app, *id, label(id, chinese), true, None::<&str>)?;
+                entries.push(Box::new(item.clone()));
+                items.push((*id, item));
+            }
+        }
+    }
+
+    let refs: Vec<&dyn IsMenuItem<Wry>> = entries.iter().map(Box::as_ref).collect();
+    let menu = Menu::<Wry>::with_items(app, &refs)?;
+    Ok(CatMenu { menu, pause, items })
 }
 
 fn on_menu(app: &AppHandle, event: &MenuEvent) {
@@ -286,7 +345,8 @@ fn on_menu(app: &AppHandle, event: &MenuEvent) {
 }
 
 fn build_tray(app: &AppHandle) -> Result<(), Box<dyn Error>> {
-    let menu = build_menu(app, false)?;
+    let chinese = app.state::<Pet>().chinese.load(Ordering::SeqCst);
+    let menu = build_menu(app, false, chinese)?;
 
     // The resting sit, cropped to the cat by tools/build_icons.py. Compiled in, so
     // the tray can never come up blank because a file went missing.
@@ -511,7 +571,8 @@ fn main() {
             stage,
             set_interactive,
             heartbeat,
-            open_menu
+            open_menu,
+            set_language
         ])
         .on_menu_event(|app, event| on_menu(app, &event))
         .setup(|app| {
